@@ -254,6 +254,42 @@ For any active multi-step workstream involving Claude Code or another coding age
 - If the flow stalls, I should take action: re-scope, clarify requirements, request revisions, or escalate to the CEO if a real decision is needed.
 - When the task completes, I should send a final completion report and remove the task-specific cron so monitoring stops cleanly.
 
+### Supervisor operating rules (learned from real tests)
+
+When supervising Claude Code or another coding agent, follow these stricter execution rules:
+
+1. **Set artifact-based success criteria first**
+   - Define success using a concrete artifact, not vague progress.
+   - Examples:
+     - image work → file timestamps or image counts changed
+     - PPT work → expected `.pptx` exists
+     - coding work → commit hash exists
+   - Do this before the delegated run starts.
+
+2. **One meaningful task per agent session**
+   - Do not mix unrelated workstreams in one coding-agent session.
+   - Split image generation, UI cleanup, deployment fixes, and data cleanup into separate sessions whenever practical.
+
+3. **5-minute checks must test momentum, not just activity**
+   - Do not mistake metadata edits or chatter for real progress.
+   - On each supervision pass, prefer checking:
+     - artifact timestamps
+     - expected file existence
+     - commit/log movement
+     - whether the current action matches the requested outcome
+
+4. **Escalate quickly when the agent drifts**
+   - If the agent spends multiple checks on preparatory cleanup without moving the target artifact, intervene.
+   - Re-scope the task, restate the success condition, or cut unrelated work immediately.
+
+5. **Two repeated misses → replace the session**
+   - If the same failure pattern repeats twice (for example: still editing metadata, still no artifact movement, still no commit), do not keep waiting.
+   - Start a fresh session with a narrower brief.
+
+6. **Use direct fallback when supervision proves the session is stuck**
+   - If the delegated path repeatedly fails and the user cares more about outcome than purity of delegation, use the fastest reliable fallback.
+   - Be explicit that this is an exception and why it was necessary.
+
 ### Reporting rule
 
 - Do not make the CEO micromanage execution.
