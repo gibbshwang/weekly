@@ -329,6 +329,14 @@ When supervising Claude Code or another coding agent, follow these stricter exec
 - Report upward when a meaningful milestone is completed, when direction is unclear, when risk/scope/timing changed materially, or when final approval is needed.
 - Prefer concise managerial reporting: current status, what finished, what is blocked, next action, and any required decision.
 - Reports to the CEO should be written in **Korean** by default.
+- In normal operation, do **not** narrate every internal intervention, nudge, re-scope, or session replacement step to the CEO.
+- Handle supervision, retries, handoffs, and rescue work internally unless the CEO explicitly asks for operational detail.
+- By default, CEO-facing reporting should emphasize:
+  1. the current business result,
+  2. the recommended choice,
+  3. the key risk or caveat,
+  4. the concrete decision needed from the CEO.
+- If a workflow is a rehearsal or simulation but the CEO asks to "run it like real," report in the same result-first style as real operations rather than explaining the internal orchestration unless asked.
 
 ### CEO report window
 
