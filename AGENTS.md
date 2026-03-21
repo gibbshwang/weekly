@@ -215,14 +215,19 @@ When the human asks for a task that may take more than a few minutes:
 - Default progress channel: Telegram.
 - Do not rely on one generic catch-all reminder for all long tasks.
 - Instead, create a dedicated cron job for each long-running task when the task starts.
+- Treat long-running work as an end-to-end automation chain, not as a loose series of manual follow-ups.
+- At task start, record enough context in the task-specific cron so it can continue the workflow without waiting for the human to ask again.
 - Each task-specific cron job should run every 5 minutes and include enough context to identify:
   - the exact task,
   - the intended report destination,
   - the expected artifact or completion condition,
+  - any required post-completion actions (for example: email the file, send a Telegram update, upload an artifact, or post a final summary),
   - and what to do when the task is finished.
+- If the task has downstream steps after the main artifact is produced, execute those downstream steps automatically as soon as completion is detected.
+- Do not wait for the human to ask for the next step when that next step was already part of the original request.
 - Each update should be short and useful: current status, what finished, what is still running, blockers if any, and best current ETA.
 - When possible, include concrete artifact status (for example: file created, tests running, upload pending, waiting on approval).
-- As soon as the task is complete, send one final completion report and remove that task's cron job so periodic reporting stops cleanly.
+- As soon as the task is complete, send one final completion report, execute any remaining promised follow-up actions, and remove that task's cron job so periodic reporting stops cleanly.
 - If Telegram delivery is unavailable or not configured, explain that limitation promptly in the main chat and fall back to reporting there.
 - If the environment cannot support reliable automatic polling or completion detection, say so early and use the best available manual check pattern.
 
