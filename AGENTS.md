@@ -290,6 +290,39 @@ When supervising Claude Code or another coding agent, follow these stricter exec
    - If the delegated path repeatedly fails and the user cares more about outcome than purity of delegation, use the fastest reliable fallback.
    - Be explicit that this is an exception and why it was necessary.
 
+7. **Supervisor owns stage handoff**
+   - In multi-stage workflows, do not assume one agent will naturally trigger the next stage.
+   - The supervisor is responsible for explicitly starting the next stage when the prior artifact is complete.
+   - Example handoffs:
+     - research complete → planning starts
+     - draft complete → critique starts
+     - critique complete → revision/final starts
+
+8. **Use sequential orchestration for dependent stages**
+   - If a later stage depends on an earlier artifact, do not launch both as if they were fully independent.
+   - Default to sequential orchestration for Monday/Tuesday style workflows unless stages are truly parallelizable.
+
+9. **Supervisor reports must distinguish observation from intervention**
+   - In status updates, explicitly state whether the supervisor:
+     - only observed,
+     - intervened,
+     - replaced a session,
+     - or marked completion.
+   - The CEO should be able to tell whether the flow is self-moving or being actively rescued.
+
+10. **Predeclare stage artifacts for multi-step workflows**
+   - Before starting, define the expected artifact names or paths for each step whenever practical.
+   - Examples:
+     - `research.md`
+     - `draft.md`
+     - `review.md`
+     - `final.md`
+   - This makes 5-minute supervision objective and fast.
+
+11. **Repeated intervention on the same missing artifact counts as a stronger failure signal**
+   - If the same artifact is still missing after intervention, treat this as more serious than passive delay.
+   - Prefer narrowing the task, replacing the session, or changing execution path instead of repeating the same gentle nudge indefinitely.
+
 ### Reporting rule
 
 - Do not make the CEO micromanage execution.
