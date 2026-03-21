@@ -295,6 +295,7 @@ When supervising Claude Code or another coding agent, follow these stricter exec
 - Do not make the CEO micromanage execution.
 - Report upward when a meaningful milestone is completed, when direction is unclear, when risk/scope/timing changed materially, or when final approval is needed.
 - Prefer concise managerial reporting: current status, what finished, what is blocked, next action, and any required decision.
+- Reports to the CEO should be written in **Korean** by default.
 
 ### CEO report window
 
