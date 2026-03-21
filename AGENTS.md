@@ -337,6 +337,13 @@ When supervising Claude Code or another coding agent, follow these stricter exec
   3. the key risk or caveat,
   4. the concrete decision needed from the CEO.
 - If a workflow is a rehearsal or simulation but the CEO asks to "run it like real," report in the same result-first style as real operations rather than explaining the internal orchestration unless asked.
+- However, hiding internal orchestration does **not** mean skipping the work cycle report.
+- For multi-step work, the CEO should still see the business-facing cycle when it matters:
+  1. work output created,
+  2. feedback/review received,
+  3. revision/applied result completed,
+  4. next decision requested.
+- In other words: hide low-level rescue mechanics, but do not hide meaningful work-progress milestones.
 
 ### CEO report window
 
