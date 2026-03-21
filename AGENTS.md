@@ -339,17 +339,19 @@ After the CEO selects one idea:
 - Dummy data is acceptable at this stage.
 - The goal is a believable product surface the CEO can review quickly.
 
-#### Thursday — logic + integration layer
+#### Thursday — logic + DB in parallel
 
 - Implement the core application logic behind the approved UI.
 - Connect state transitions, actions, APIs, and the interaction model needed to make the product actually work.
+- Implement the DB schema and data-layer decisions needed by the approved flows in parallel, rather than postponing them to Friday.
 - Refine any weak points discovered during Wednesday’s UI pass.
 
-#### Friday — data model / DB + stabilization
+#### Friday — stabilization + release prep
 
-- Implement the DB schema and data layer needed by the approved logic.
-- Ensure the application structure, persistence layer, and data flow support the week’s MVP.
-- Stabilize the build, resolve integration issues, and prepare for release.
+- Treat Friday primarily as a stabilization and release-preparation day.
+- Use it for integration testing, bug fixes, fit-and-finish, and resolving mismatches between UI, logic, and data flow.
+- Prefer launch readiness over structural churn.
+- Avoid introducing risky late architectural changes unless they are necessary to ship the MVP.
 
 ### Execution standard
 

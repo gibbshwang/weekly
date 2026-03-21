@@ -211,28 +211,29 @@ Return:
 
 ---
 
-## Template D — Thursday logic supervision
+## Template D — Thursday logic + DB supervision
 
 ### 목적
-핵심 로직, 상태 전이, API/동작 연결 구현이 끊기지 않도록 감독
+핵심 로직, 상태 전이, API/동작 연결과 DB 스키마/데이터 레이어 구현이 병행되도록 감독
 
 ```text
-This is a 5-minute supervision check for Thursday logic implementation.
+This is a 5-minute supervision check for Thursday logic and DB implementation.
 
 Workstream goal:
-Make the approved UI actually function through core application logic and integration behavior.
+Make the approved UI actually function through core application logic and integration behavior, while implementing the DB schema and data layer in parallel.
 
 Supervision job:
 - Check whether the key actions and flows are being implemented behind the UI.
-- Identify whether state handling, action flow, and integration assumptions are coherent.
+- Check whether the schema/data-layer decisions required by the core user journey are being implemented in parallel instead of being deferred too late.
+- Identify whether state handling, action flow, API behavior, and data assumptions are coherent.
 - If work is drifting into overengineering, cut scope.
 - If the main user journey is not yet functioning, push work back to the shortest path to a working flow.
-- If a meaningful logic milestone is complete, prepare a CEO update.
+- If a meaningful logic or data-integration milestone is complete, prepare a CEO update.
 - If complete, stop monitoring.
 
 Return:
 - state classification
-- what logic path is now working
+- what logic/data path is now working
 - what remains broken or unimplemented
 - next action
 - whether to report now
@@ -240,21 +241,22 @@ Return:
 
 ---
 
-## Template E — Friday DB/stabilization supervision
+## Template E — Friday stabilization supervision
 
 ### 목적
-DB 스키마/데이터 레이어/안정화/배포 준비 흐름이 끊기지 않도록 감독
+통합 테스트, 버그 수정, 안정화, 배포 준비 흐름이 끊기지 않도록 감독
 
 ```text
-This is a 5-minute supervision check for Friday data-layer and stabilization work.
+This is a 5-minute supervision check for Friday stabilization and release-prep work.
 
 Workstream goal:
-Implement the DB schema and data layer required by the MVP, stabilize the product, and prepare it for release.
+Stabilize the MVP, resolve integration issues, reduce launch risk, and prepare the product for release.
 
 Supervision job:
-- Check whether the persistence layer and schema work are progressing.
-- Check whether integration bugs or structural mismatches were found.
+- Check whether integration testing, bug fixing, and fit-and-finish work are progressing.
+- Check whether there are mismatches between UI, logic, and data flow.
 - Prioritize launch stability over unnecessary feature additions.
+- Avoid risky late architectural churn unless it is necessary to ship.
 - If critical blockers exist, identify the shortest viable workaround.
 - If release readiness is reached, prepare the final CEO update and stop monitoring.
 
