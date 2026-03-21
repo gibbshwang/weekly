@@ -273,6 +273,10 @@ Return:
 아래는 등록 시 참고할 수 있는 예시 구조다.
 실제 job 추가 시에는 해당 주간 작업 문맥에 맞게 문구를 채운다.
 
+기본 주간 시작 규칙:
+- 주간 운영은 기본적으로 **매주 월요일 06:00 (Asia/Seoul)** 에 시작한다.
+- 이 시점에 Monday 후보 발굴 workstream을 시작하는 kick-off job 또는 그에 준하는 자동화 체인을 설계한다.
+
 ### 예시 1 — Monday supervision job
 
 ```json

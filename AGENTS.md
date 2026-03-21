@@ -309,6 +309,9 @@ Use this default weekly operating cadence for the user’s “one launched web a
 
 #### Monday — opportunity selection
 
+- The weekly build cycle starts every **Monday at 06:00 Asia/Seoul** by default.
+- Monday 06:00 is the kickoff point for the weekly workflow unless the user overrides it.
+
 Run a 3-agent workflow and report candidate ideas to the user on Telegram:
 
 1. **Agent One: market/opportunity researcher**
