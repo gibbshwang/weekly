@@ -212,10 +212,17 @@ The goal: Be helpful without being annoying. Check in a few times a day, do usef
 When the human asks for a task that may take more than a few minutes:
 
 - Start progress reporting automatically unless they say not to.
-- Send a progress update every 5 minutes by Telegram while the task is still running.
+- Default progress channel: Telegram.
+- Do not rely on one generic catch-all reminder for all long tasks.
+- Instead, create a dedicated cron job for each long-running task when the task starts.
+- Each task-specific cron job should run every 5 minutes and include enough context to identify:
+  - the exact task,
+  - the intended report destination,
+  - the expected artifact or completion condition,
+  - and what to do when the task is finished.
 - Each update should be short and useful: current status, what finished, what is still running, blockers if any, and best current ETA.
 - When possible, include concrete artifact status (for example: file created, tests running, upload pending, waiting on approval).
-- As soon as the task is complete, send one final completion report and stop the periodic updates.
+- As soon as the task is complete, send one final completion report and remove that task's cron job so periodic reporting stops cleanly.
 - If Telegram delivery is unavailable or not configured, explain that limitation promptly in the main chat and fall back to reporting there.
 - If the environment cannot support reliable automatic polling or completion detection, say so early and use the best available manual check pattern.
 
