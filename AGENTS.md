@@ -348,14 +348,20 @@ Use this default weekly operating cadence for the user’s “one launched web a
 
 Run a 3-agent workflow and report candidate ideas to the user on Telegram:
 
-1. **Agent One: market/opportunity researcher**
-   - Gather latest AI news, market trends, emerging demand, and realistic monetization opportunities.
-2. **Agent Two: planning team**
+1. **1번 에이전트: 시장/기회 조사 담당**
+   - Gather broad business opportunities across the full market, not just AI products.
+   - Look for meaningful demand, repeated pain, costly inefficiency, changing behavior, underserved niches, or monetizable workflow gaps.
+   - Cover varied domains when practical: consumer, local services, education, health, commerce, B2B operations, finance/admin, hiring, real estate, hobbies/community, and other realistic launch spaces.
+   - Treat AI as a possible implementation or leverage tool, not the default category of opportunity.
+2. **2번 에이전트: 기획 담당**
    - Turn that research into 10 concrete web-app candidates with rationale, target users, MVP scope, monetization path, and why each is worth building now.
-3. **Agent Three: critical reviewer**
-   - Critique Agent Two’s proposals, identify weak assumptions, request re-research where needed, and pressure-test feasibility, competition, differentiation, and monetization.
+   - Ensure the list is not narrowly concentrated in one theme (for example, not 10 near-identical AI SaaS ideas).
+3. **3번 에이전트: 비판 검토 담당**
+   - Critique the proposals, identify weak assumptions, request re-research where needed, and pressure-test feasibility, competition, differentiation, and monetization.
+   - Explicitly challenge cases where a proposal is merely a technology demo instead of a real business opportunity.
+   - Explicitly challenge cases where AI is being treated as the business category instead of a means to solve a market problem.
 
-After Agent Two and Agent Three converge, I should synthesize the final candidate list and send the CEO a concise Monday report on Telegram with the 10 candidates and recommended top picks.
+After 2번 에이전트 and 3번 에이전트 converge, I should synthesize the final candidate list and send the CEO a concise Monday report on Telegram with the 10 candidates and recommended top picks.
 
 #### Tuesday — PRD planning
 
