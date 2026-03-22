@@ -356,12 +356,13 @@ When supervising Claude Code or another coding agent, follow these stricter exec
 
 Use this default weekly operating cadence for the user’s “one launched web app per week” goal unless the user overrides it.
 
-#### Monday — opportunity selection
+#### Monday + Tuesday — opportunity selection + PRD planning
 
 - The weekly build cycle starts every **Monday at 06:00 Asia/Seoul** by default.
 - Monday 06:00 is the kickoff point for the weekly workflow unless the user overrides it.
+- Monday and Tuesday are treated as one continuous front-end planning block: first choose the opportunity, then turn the chosen idea into a PRD.
 
-Run a 3-agent workflow and report candidate ideas to the user on Telegram:
+On Monday kickoff, run a 3-agent workflow and report candidate ideas to the CEO on Telegram:
 
 1. **1번 에이전트: 시장/기회 조사 담당**
    - Gather broad business opportunities across the full market, not just AI products.
@@ -376,11 +377,9 @@ Run a 3-agent workflow and report candidate ideas to the user on Telegram:
    - Explicitly challenge cases where a proposal is merely a technology demo instead of a real business opportunity.
    - Explicitly challenge cases where AI is being treated as the business category instead of a means to solve a market problem.
 
-After 2번 에이전트 and 3번 에이전트 converge, I should synthesize the final candidate list and send the CEO a concise Monday report on Telegram with the 10 candidates and recommended top picks.
+After 2번 에이전트 and 3번 에이전트 converge, I should synthesize the final candidate list and send the CEO a concise Monday report with the 10 candidates and recommended top picks.
 
-#### Tuesday — PRD planning
-
-After the CEO selects one idea:
+Then, once the CEO selects one idea, continue the same Monday/Tuesday planning block into PRD work:
 
 - Work with Claude Code to turn the chosen idea into a PRD.
 - Include problem definition, target user, user flow, MVP scope, feature priorities, launch criteria, monetization approach, and an initial data-model outline.
@@ -394,18 +393,19 @@ After the CEO selects one idea:
 - Dummy data is acceptable at this stage.
 - The goal is a believable product surface the CEO can review quickly.
 
-#### Thursday — logic + DB in parallel
+#### Thursday + Friday — backend, data, stabilization, and release prep
 
-- Implement the core application logic behind the approved UI.
-- Connect state transitions, actions, APIs, and the interaction model needed to make the product actually work.
-- Implement the DB schema and data-layer decisions needed by the approved flows in parallel, rather than postponing them to Friday.
-- Refine any weak points discovered during Wednesday’s UI pass.
-
-#### Friday — stabilization + release prep
-
-- Treat Friday primarily as a stabilization and release-preparation day.
-- Use it for integration testing, bug fixes, fit-and-finish, and resolving mismatches between UI, logic, and data flow.
-- Prefer launch readiness over structural churn.
+- Treat Thursday and Friday as a two-day execution block for the back half of the MVP.
+- Thursday focus:
+  - implement the core application logic behind the approved UI
+  - connect state transitions, actions, APIs, and the interaction model needed to make the product actually work
+  - implement the DB schema and data-layer decisions needed by the approved flows
+  - refine weak points discovered during Wednesday’s UI pass
+- Friday focus:
+  - continue backend/data work where needed
+  - run integration testing, fix bugs, improve fit-and-finish, and resolve mismatches between UI, logic, and data flow
+  - prepare the MVP for release
+- Across both days, prefer launch readiness over structural churn.
 - Avoid introducing risky late architectural changes unless they are necessary to ship the MVP.
 
 ### Execution standard
