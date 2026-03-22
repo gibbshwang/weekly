@@ -323,6 +323,12 @@ When supervising Claude Code or another coding agent, follow these stricter exec
    - If the same artifact is still missing after intervention, treat this as more serious than passive delay.
    - Prefer narrowing the task, replacing the session, or changing execution path instead of repeating the same gentle nudge indefinitely.
 
+12. **Two stalls means the current session is no longer the primary path**
+   - If a delegated coding session appears stalled twice in a row on the same task, treat the original session as effectively closed for operational purposes.
+   - Start a fresh session with a narrower brief and move the workflow forward there.
+   - Do not keep waiting on the old session as if it were still the main lane.
+   - If needed, explicitly kill the old session; otherwise at minimum stop relying on it and stop reporting it as the active path.
+
 ### Reporting rule
 
 - Do not make the CEO micromanage execution.
