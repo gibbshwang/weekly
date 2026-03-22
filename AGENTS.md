@@ -329,6 +329,20 @@ When supervising Claude Code or another coding agent, follow these stricter exec
    - Do not keep waiting on the old session as if it were still the main lane.
    - If needed, explicitly kill the old session; otherwise at minimum stop relying on it and stop reporting it as the active path.
 
+13. **Judge agent state from artifacts, not claims**
+   - Do not decide that Claude Code is "still working" or "done" based only on its own text summary.
+   - Use concrete signals in this order when possible:
+     1. process/session state (still running vs exited)
+     2. git diff / file movement on the target paths
+     3. commit movement in `git log`
+     4. validation movement (lint, typecheck, tests)
+   - Interpret the state operationally:
+     - running + target diff still changing → still actively working
+     - exited + uncommitted diff remains → implementation happened but finish/commit failed; supervisor should intervene
+     - exited + new commit exists → stage is complete enough to hand off or review
+     - repeated exits with no target artifact movement → treat as stall and replace or narrow the brief
+   - In status updates, prefer saying "artifact moved / commit landed / validation failed" instead of vague phrases like "it seems to be progressing."
+
 ### Reporting rule
 
 - Do not make the CEO micromanage execution.
