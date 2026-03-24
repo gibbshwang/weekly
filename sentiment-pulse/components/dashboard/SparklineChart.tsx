@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import {
   LineChart,
   Line,
@@ -74,11 +75,14 @@ function formatXDate(dateStr: string) {
 }
 
 export default function SparklineChart() {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+
   return (
-    <div className="bg-gray-900 rounded-xl p-4 md:p-6 border border-gray-800 flex flex-col gap-4">
+    <div className="bg-gray-900 rounded-xl p-4 md:p-5 border border-gray-800 flex flex-col gap-3">
       <div>
-        <h2 className="text-lg font-bold text-white">30일 추이</h2>
-        <p className="text-xs text-gray-500 mt-1">최근 30거래일 심리 지수 변화</p>
+        <h2 className="text-sm font-bold text-white">30일 추이</h2>
+        <p className="text-xs text-gray-600 mt-0.5">최근 30거래일 심리 지수 변화</p>
       </div>
 
       {/* Legend */}
@@ -97,40 +101,43 @@ export default function SparklineChart() {
         ))}
       </div>
 
-      <div className="h-56">
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={mockHistory} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
-            <XAxis
-              dataKey="date"
-              tickFormatter={formatXDate}
-              tick={{ fill: "#6b7280", fontSize: 10 }}
-              tickLine={false}
-              axisLine={{ stroke: "#374151" }}
-              interval={4}
-            />
-            <YAxis
-              domain={[0, 100]}
-              tick={{ fill: "#6b7280", fontSize: 10 }}
-              tickLine={false}
-              axisLine={false}
-            />
-            <Tooltip content={<CustomTooltip />} />
-            {/* Reference zone bands */}
-            <ReferenceLine y={20} stroke="#dc2626" strokeDasharray="3 3" strokeOpacity={0.5} />
-            <ReferenceLine y={40} stroke="#ef4444" strokeDasharray="3 3" strokeOpacity={0.5} />
-            <ReferenceLine y={60} stroke="#6b7280" strokeDasharray="3 3" strokeOpacity={0.5} />
-            <ReferenceLine y={80} stroke="#22c55e" strokeDasharray="3 3" strokeOpacity={0.5} />
-            <Line
-              type="monotone"
-              dataKey="score"
-              stroke="#ef4444"
-              strokeWidth={2}
-              dot={<CustomDot />}
-              activeDot={{ r: 5, fill: "#ef4444" }}
-            />
-          </LineChart>
-        </ResponsiveContainer>
+      <div className="h-56 min-w-0 overflow-hidden">
+        {mounted ? (
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={mockHistory} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+              <XAxis
+                dataKey="date"
+                tickFormatter={formatXDate}
+                tick={{ fill: "#6b7280", fontSize: 10 }}
+                tickLine={false}
+                axisLine={{ stroke: "#374151" }}
+                interval={4}
+              />
+              <YAxis
+                domain={[0, 100]}
+                tick={{ fill: "#6b7280", fontSize: 10 }}
+                tickLine={false}
+                axisLine={false}
+              />
+              <Tooltip content={<CustomTooltip />} />
+              <ReferenceLine y={20} stroke="#dc2626" strokeDasharray="3 3" strokeOpacity={0.5} />
+              <ReferenceLine y={40} stroke="#ef4444" strokeDasharray="3 3" strokeOpacity={0.5} />
+              <ReferenceLine y={60} stroke="#6b7280" strokeDasharray="3 3" strokeOpacity={0.5} />
+              <ReferenceLine y={80} stroke="#22c55e" strokeDasharray="3 3" strokeOpacity={0.5} />
+              <Line
+                type="monotone"
+                dataKey="score"
+                stroke="#ef4444"
+                strokeWidth={2}
+                dot={<CustomDot />}
+                activeDot={{ r: 5, fill: "#ef4444" }}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        ) : (
+          <div className="w-full h-full bg-gray-800/30 rounded animate-pulse" />
+        )}
       </div>
 
       <div className="flex justify-between text-xs text-gray-600 px-1">

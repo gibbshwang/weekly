@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   LineChart,
   Line,
@@ -85,6 +85,8 @@ type Period = "30" | "90" | "all";
 
 export default function HistoryPage() {
   const [period, setPeriod] = useState<Period>("30");
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
 
   const tabs: { id: Period; label: string; pro: boolean }[] = [
     { id: "30", label: "30일", pro: false },
@@ -124,39 +126,43 @@ export default function HistoryPage() {
       {/* Chart */}
       <div className="bg-gray-900 rounded-xl p-4 md:p-6 border border-gray-800 relative">
         <h2 className="text-base font-bold text-white mb-4">심리 지수 추이</h2>
-        <div className="h-72">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={mockHistory} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
-              <XAxis
-                dataKey="date"
-                tickFormatter={formatXDate}
-                tick={{ fill: "#6b7280", fontSize: 10 }}
-                tickLine={false}
-                axisLine={{ stroke: "#374151" }}
-                interval={3}
-              />
-              <YAxis
-                domain={[0, 100]}
-                tick={{ fill: "#6b7280", fontSize: 10 }}
-                tickLine={false}
-                axisLine={false}
-              />
-              <Tooltip content={<CustomTooltip />} />
-              <ReferenceLine y={20} stroke="#dc2626" strokeDasharray="3 3" strokeOpacity={0.5} label={{ value: "극공포", fill: "#dc2626", fontSize: 9 }} />
-              <ReferenceLine y={40} stroke="#ef4444" strokeDasharray="3 3" strokeOpacity={0.5} label={{ value: "공포", fill: "#ef4444", fontSize: 9 }} />
-              <ReferenceLine y={60} stroke="#6b7280" strokeDasharray="3 3" strokeOpacity={0.5} label={{ value: "중립", fill: "#9ca3af", fontSize: 9 }} />
-              <ReferenceLine y={80} stroke="#22c55e" strokeDasharray="3 3" strokeOpacity={0.5} label={{ value: "탐욕", fill: "#22c55e", fontSize: 9 }} />
-              <Line
-                type="monotone"
-                dataKey="score"
-                stroke="#ef4444"
-                strokeWidth={2}
-                dot={<CustomDot />}
-                activeDot={{ r: 5 }}
-              />
-            </LineChart>
-          </ResponsiveContainer>
+        <div className="h-72 min-w-0 overflow-hidden">
+          {mounted ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={mockHistory} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+                <XAxis
+                  dataKey="date"
+                  tickFormatter={formatXDate}
+                  tick={{ fill: "#6b7280", fontSize: 10 }}
+                  tickLine={false}
+                  axisLine={{ stroke: "#374151" }}
+                  interval={3}
+                />
+                <YAxis
+                  domain={[0, 100]}
+                  tick={{ fill: "#6b7280", fontSize: 10 }}
+                  tickLine={false}
+                  axisLine={false}
+                />
+                <Tooltip content={<CustomTooltip />} />
+                <ReferenceLine y={20} stroke="#dc2626" strokeDasharray="3 3" strokeOpacity={0.5} label={{ value: "극공포", fill: "#dc2626", fontSize: 9 }} />
+                <ReferenceLine y={40} stroke="#ef4444" strokeDasharray="3 3" strokeOpacity={0.5} label={{ value: "공포", fill: "#ef4444", fontSize: 9 }} />
+                <ReferenceLine y={60} stroke="#6b7280" strokeDasharray="3 3" strokeOpacity={0.5} label={{ value: "중립", fill: "#9ca3af", fontSize: 9 }} />
+                <ReferenceLine y={80} stroke="#22c55e" strokeDasharray="3 3" strokeOpacity={0.5} label={{ value: "탐욕", fill: "#22c55e", fontSize: 9 }} />
+                <Line
+                  type="monotone"
+                  dataKey="score"
+                  stroke="#ef4444"
+                  strokeWidth={2}
+                  dot={<CustomDot />}
+                  activeDot={{ r: 5 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="w-full h-full bg-gray-800/30 rounded animate-pulse" />
+          )}
         </div>
 
         {/* Pro blur overlay for 90d/all */}
