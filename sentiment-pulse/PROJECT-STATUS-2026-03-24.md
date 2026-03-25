@@ -1,231 +1,116 @@
-# sentiment-pulse 진행 기록 — 2026-03-24
+# sentiment-pulse 진행 기록 — 2026-03-25 업데이트
 
 ## 개요
 
 프로젝트명: **sentiment-pulse**  
-제품 워킹 브랜드: **MOODEX**
+현재 제품 정의: **Korea Fear & Greed Index (K-FGI)**
 
 한 줄 정의:
-미국 시장심리 7대 구성 지표를 한국어로 해석하고, 역사적 맥락과 자산별 함의, 실전 활용 프레임까지 연결해주는 대시보드.
+미국 Fear & Greed의 7가지 개념을 한국 시장 데이터로 재구성하고,
+극단적 공포/탐욕 구간에서 과거 유사 사례 이후 자산 반응을 비교해 보여주는 분석형 대시보드.
 
 ---
 
-## 오늘까지 진행된 핵심 내용
+## 이번 업데이트의 핵심 변화
 
-### 1. 제품 방향 정리
-초기에는 방향이 흔들린 구간이 있었지만, 최종적으로 아래 철학으로 정렬함.
+### 1. 제품 정의 전환
+기존에는 MOODEX / 미국 시장심리 해석 앱에 가까운 방향이었지만,
+이번 업데이트에서 제품 정의를 아래처럼 명확히 전환했다.
 
-- 이 제품은 **단순 지수 복제 서비스가 아님**
-- 핵심은 **Fear & Greed를 어떻게 해석하고 활용할지 제품화하는 것**
-- 7개 항목은 계산 구조이자 설명 구조이며,
-  제품의 진짜 모트는 다음에 둠:
-  - 해석
-  - 역사적 맥락
-  - 자산군 함의
-  - 실전 활용 프레임
-  - 유료 인사이트 깊이
+- 미국 지표를 해석하는 앱이 아니라
+- **한국 시장용 자체 합성 심리지수(K-FGI)** 를 만드는 제품
+- 미국 Fear & Greed의 7개 개념은 참고 프레임일 뿐,
+  실제 데이터는 한국 시장 프록시로 재구성
+
+즉, 제품의 정체성이 더 선명해졌다:
+- KOSPI
+- KOSDAQ
+- VKOSPI
+- Put/Call
+- 국채/안전자산 선호
+- 신용스프레드
+같은 로컬 시그널이 중심이 된다.
 
 ---
 
-### 2. PRD / 기획 문서 세트 완성
-프로젝트 루트에 아래 문서 세트를 정리함.
+### 2. PRD 개편
+다음 문서가 새 방향으로 정리되었다.
+
+- `PRD-ONE-PAGER.md`
+- `PRD.md`
+
+핵심 반영 내용:
+- Fear & Greed를 단순 심리 지표가 아니라
+  **역발상 매수/매도 분석 도구**로 정의
+- 현재 점수 + 과거 유사 사례 + 자산별 후속 성과를 함께 보여주는 제품으로 개편
+- buy timing / sell timing / heatmap / historical analogs / methodology 중심 구조 반영
+- 이후 추가로 한국형 7-factor 지수 방향까지 반영 시작
+
+---
+
+### 3. 관련 문서 정렬
+아래 문서들을 K-FGI 방향에 맞게 재정렬했다.
 
 - `README.md`
-- `REFERENCE-PRD-NOTES.md`
-- `PRD-ONE-PAGER.md`
-- `FEATURES-FREE-PAID.md`
-- `MVP-IA.md`
 - `BUILD-BRIEF.md`
+- `MVP-IA.md`
+- `FEATURES-FREE-PAID.md`
 
-정리된 핵심 원칙:
-- CNN Fear & Greed의 **7대 구성 지표 프레임워크**를 기반으로 함
-- 단, CNN 공식 내부 정규화는 비공개이므로
-  **자체 근사(approximation)** 방식 사용을 명시
-- 1주 MVP 현실성을 고려해
-  - Phase 1: 4개 지표
-  - Phase 1.5: 2개 지표
-  - Phase 2: 1개 지표
-  구조로 단계화함
+정렬 방향:
+- MOODEX / 미국 데이터 중심 설명 축소
+- K-FGI / 한국형 7개 시그널 중심 구조 강화
+- 제품을 clone이 아니라 **한국형 지수 + 분석 대시보드**로 설명
 
 ---
 
-### 3. 투자 활용 관점 강화
-문서 작성 중간에 다음 기준을 추가로 강하게 반영함.
+## 현재 제품 철학
 
-- 이 제품은 단순 해석에서 끝나면 안 됨
-- 사용자가 **실제 투자 의사결정 과정에서 어떻게 참고할지**까지 연결해야 함
-- 단, 표현은 투자 추천이 아니라 아래 기준을 따름:
-  - 활용 프레임
-  - 의사결정 보조
-  - 리스크 관리 관점
-  - 자산 배분 해석
-  - 과거에 자주 관찰된 패턴
+### 핵심 원칙
+1. **Signal over sentiment**
+   - 숫자만 보여주지 말고 해석 가능한 신호를 제공한다.
 
-금지 원칙도 명시함:
-- "지금 사야 한다"
-- "매도해야 한다"
-- "수익이 난다"
-같은 직접 조언 표현은 쓰지 않음
+2. **Historical context matters**
+   - 현재 점수보다 과거 유사 사례 이후 결과가 중요하다.
 
----
+3. **Probabilistic, not absolute**
+   - 투자 추천이 아니라 과거 패턴 기반 해석을 제공한다.
 
-### 4. PRD 완성 판정
-관리/감독 과정을 거쳐 PRD 문서 세트는
-**최종 리뷰/확정 가능한 수준**까지 올라왔다고 판단함.
+4. **Cross-asset insight**
+   - 주식, 원자재, 코인 반응 차이를 함께 본다.
 
-완료 판정 기준:
-- 7개 항목 중심성 확보
-- 해석/역사/자산 함의 확보
-- 실제 투자 활용 프레임 반영
-- 1주 MVP 현실성 확보
-- 무료/유료 구조 설득력 확보
-
-이후 PRD 전용 감독 루프는 종료하고,
-다음 단계인 **화요일 UI 단계**로 전환함.
+5. **Korean market first**
+   - 제품 정체성은 한국형 로컬 시그널에 있다.
 
 ---
 
-## UI 단계 진행 현황
+## 현재 해야 할 다음 단계
 
-### 1. 운영 기준 확정
-이번 프로젝트의 실행 기준은 아래와 같이 확정함.
+### 1. UI 리디자인 반영
+현재 UI는 이전 방향의 흔적이 남아 있을 수 있으므로,
+아래 구조로 점진 전환이 필요하다.
 
-- **화요일 = UI**
-- **수요일 = 로직 / API / 데이터 연결**
+- K-FGI hero
+- 7 signals today
+- buy timing analysis
+- sell timing analysis
+- cross-asset heatmap
+- historical analog cases
+- methodology / disclaimer
 
-즉, 현재는 UI-first 단계이며,
-로직/API/데이터 연결은 다음 단계로 미룸.
+### 2. 데이터 정의
+- 7개 시그널 raw data source 확정
+- 정규화 방식 정의
+- composite score 계산 함수 작성
+- regime 판별 로직 구현
 
----
-
-### 2. UI 구현 시작
-Claude Code에 UI-first 전용 브리프를 넘겨 아래를 우선 구현하도록 지시함.
-
-핵심 UI 범위:
-- dashboard
-- 7-component card grid
-- historical/context section
-- asset implication section
-- practical usage frame section
-- subscribe / free-vs-paid surface
-- mobile/desktop coherence
-
-제약 조건:
-- 지금은 UI만
-- 로직/API/데이터 연결로 드리프트 금지
-- 필요한 최소 mock/placeholder만 허용
-
----
-
-### 3. 범위 이탈 개입
-UI 착수 초기, 앱 스캐폴드를 만들면서 기존 PRD 문서를 삭제 방향으로 건드린 정황이 있어 즉시 개입함.
-
-개입 내용:
-- 아래 문서들은 절대 삭제하지 않도록 지시
-  - `README.md`
-  - `REFERENCE-PRD-NOTES.md`
-  - `PRD-ONE-PAGER.md`
-  - `FEATURES-FREE-PAID.md`
-  - `MVP-IA.md`
-  - `BUILD-BRIEF.md`
-- 프로젝트는 아래 두 성격을 동시에 유지하도록 고정
-  - 기획 문서 패키지
-  - 실제 구현 워크스페이스
-
----
-
-### 4. UI checkpoint 확보
-현재까지 확인된 의미 있는 UI 커밋은 다음과 같음.
-
-#### 커밋 1
-- `7de245d`
-- 메시지: `feat: scaffold MOODEX UI — full dashboard + 4 pages, build green`
-
-의미:
-- 기본 UI 스캐폴드 완성
-- 핵심 페이지 4개 골격 생성
-- 빌드 통과 확인
-
-#### 커밋 2
-- `1cebe9b`
-- 메시지: `refine: elevate dashboard hierarchy and usage framing for CEO readability`
-
-의미:
-- 대시보드 시각 계층 개선
-- 실전 활용 프레임 가시성 강화
-- CEO/리뷰어 관점에서 빠르게 읽히도록 UI 보정
-
----
-
-### 5. 실제 UI 표면 상태
-빌드 산출물 기준으로 아래 페이지가 돌아가는 수준까지 올라온 상태로 판단함.
-
-- `/dashboard`
-- `/history`
-- `/guide`
-- `/subscribe`
-
-즉, 단순 컴포넌트 수준이 아니라
-**리뷰 가능한 제품 표면**이 이미 확보됨.
-
----
-
-### 6. 현재 UI 단계 해석
-현재 상태는 다음과 같음.
-
-- 초기 UI 구축 완료
-- 1차 refinement 완료
-- 첫 UI checkpoint 이후 추가 진전이 잠시 둔화된 구간이 있었음
-- 이에 따라 dashboard-only 좁은 corrective brief를 넣어 추가 refinement를 유도함
-- 결과적으로 의미 있는 대시보드 개선 커밋까지 확보
-
-현재 판단:
-- 화요일 UI 단계는 이미 **의미 있는 checkpoint 확보** 상태
-- 필요 시 추가 보강 가능
-- 아니면 다음 단계(수요일 로직/API/데이터 연결)로 넘어갈 준비가 되는 상태
-
----
-
-## 오늘 작업에서 배운 점 / 운영 메모
-
-1. PRD와 UI 구현을 병행할 때는
-   **문서 자산을 구현 스캐폴드가 덮어쓰지 않도록** 초기에 범위를 명확히 고정해야 함.
-
-2. “좋은 초안” 이후에는 넓은 지시보다
-   **dashboard-only, narrow corrective brief** 같은 좁은 개입이 훨씬 효과적임.
-
-3. 제품 철학은 문서에서 끝나지 않고,
-   UI에서도 반드시 아래가 보여야 함:
-   - 7개 항목 구조
-   - 역사적 맥락
-   - 실전 활용 프레임
-   - 무료/유료 가치 차이
-
----
-
-## 다음 단계
-
-현재 기준 다음 단계는 두 가지 중 하나:
-
-### 옵션 A. 화요일 UI 추가 보강
-- 대시보드 추가 polish
-- 활용 프레임 더 중심적으로 노출
-- subscribe / free-vs-paid 메시지 강화
-- 모바일/데스크톱 일관성 보정
-
-### 옵션 B. 수요일 단계 진입
-- 7개 항목 계산 로직 연결
-- 합성 점수 / 레짐 판별
-- API 라우트 연결
-- 히스토리 데이터 연결
-- cron/update 파이프라인 연결
-- UI에 실제 데이터 주입
-
-프로젝트 운영 기준상,
-**화요일은 UI / 수요일은 로직·API·데이터 연결**로 본다.
+### 3. 과거 사례 분석
+- extreme fear / greed threshold 정의
+- 과거 사례 추출
+- 이후 7D / 30D / 90D / 180D 성과 계산
+- 자산별 avg / median / win rate / drawdown 정리
 
 ---
 
 ## 현재 한 줄 상태
 
-**PRD는 완료 판정 가능한 수준까지 정리됐고, UI는 리뷰 가능한 checkpoint 두 번을 확보한 상태다.**
+**제품은 미국 심리지표 해석 앱에서 한국형 7-factor Fear & Greed Index 분석 대시보드로 재정의되었고, 관련 핵심 문서들도 그 방향으로 반영되었다.**

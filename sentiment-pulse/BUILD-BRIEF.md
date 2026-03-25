@@ -1,318 +1,268 @@
-# BUILD BRIEF — MOODEX v0.1
+# BUILD BRIEF — Korea Fear & Greed Index v1
 
-**대상**: 코딩 에이전트 / 개발자 핸드오프
-**작성일**: 2026-03-23
-**목표 완료**: 1주 (5 영업일)
+**대상**: 코딩 에이전트 / 개발자 핸드오프  
+**작성일**: 2026-03-25  
+**목표 완료**: 한국형 7-factor 지수 기반 분석형 MVP
 
 ---
 
-## 1. 기술 스택
+## 1. 제품 정의
+
+이 프로젝트는 미국 시장의 Fear & Greed 개념을 그대로 보여주는 앱이 아니다.  
+목표는 **한국 시장용 자체 합성 심리지수(Korea Fear & Greed Index, K-FGI)** 를 만들고,
+그 지수가 극단 구간에 들어갔을 때 **과거 유사 사례 이후 자산 가격이 어떻게 반응했는지**를 보여주는 것이다.
+
+핵심 제품 가치는 다음 3가지다:
+1. 오늘 한국 시장 심리가 어디에 있는가
+2. 7개 로컬 시그널 중 어떤 요인이 공포/탐욕을 만들고 있는가
+3. 비슷한 과거 구간 이후 주식/원자재/코인 등이 어떻게 움직였는가
+
+---
+
+## 2. 기술 스택
 
 | 레이어 | 선택 | 이유 |
 |--------|------|------|
-| 프레임워크 | Next.js 15 (App Router) | SSR + API Routes 동시, Vercel 배포 최적 |
-| 언어 | TypeScript strict | |
-| 스타일 | Tailwind CSS v4 | |
-| 차트 | Recharts | 가장 가볍고 Next.js 호환 안정적 |
-| 상태관리 | Zustand v5 | 전역 score 캐시, Pro 상태 관리 |
-| 이메일 | Resend API | 무료 플랜 3,000통/월, SDK 간단 |
-| DB | Supabase (PostgreSQL) | 이메일 구독자 저장, 히스토리 캐시 |
-| 결제 | Toss Payments (또는 Stripe fallback) | 국내 카드 최적, 테스트 모드 지원 |
-| 배포 | Vercel | |
-| Cron | Vercel Cron Jobs | 매일 09:00 KST 점수 업데이트 |
+| 프레임워크 | Next.js 16 (App Router) | 현재 프로젝트 스택 기준 |
+| 언어 | TypeScript strict | 계산/도메인 모델 안정성 |
+| 스타일 | Tailwind CSS v4 | 빠른 UI 반복 |
+| 차트 | Recharts | heatmap / event study / line chart 구현 용이 |
+| 상태관리 | Zustand v5 | 지수/필터/threshold 상태 |
+| DB | 우선 없음 또는 lightweight cache | 초기에는 정적/로컬 데이터 또는 서버 캐시 우선 |
+| 배포 | Vercel 또는 동등 환경 | 기존 흐름 유지 |
+| Cron | 추후 도입 가능 | 일별 지수 계산/갱신 자동화 |
 
 ---
 
-## 2. 외부 API 연동
+## 3. K-FGI 7개 구성 요소
 
-### 2-1. alternative.me Crypto Fear & Greed
-```
-GET https://api.alternative.me/fng/?limit=90&format=json
-응답: { data: [{ value: "52", value_classification: "Neutral", timestamp: "..." }] }
-```
-- API 키 불필요
-- 일별 데이터, 최대 `limit` 파라미터로 히스토리 가져오기
+미국 Fear & Greed 7개 개념을 한국 시장 프록시로 치환한다.
 
-### 2-2. Yahoo Finance (VIX)
-```
-# Python 또는 Next.js API Route에서 yfinance 호출 또는 Yahoo Finance v8 비공개 API
-GET https://query1.finance.yahoo.com/v8/finance/chart/%5EVIX?interval=1d&range=90d
-응답: chart.result[0].indicators.quote[0].close[]
-```
-- API 키 불필요 (비공개 endpoint, 변경 가능성 있음)
-- **대안**: Alpha Vantage 무료 플랜 (5req/min, 500req/day)
+### 1) Price Momentum
+- 지표: **KOSPI vs 125일 이동평균 괴리율**
+- 의미: 장기 추세 대비 과열/과매도 판단
 
-### 2-3. MOODEX Score 계산 (서버사이드)
-```typescript
-function calcMoodexScore(cryptoFG: number, vix: number): number {
-  const vixNorm = Math.min(Math.max((vix - 10) / (80 - 10) * 100, 0), 100);
-  return Math.round(cryptoFG * 0.5 + (100 - vixNorm) * 0.5);
-}
+### 2) Stock Price Strength
+- 지표: **KOSPI+KOSDAQ 52주 신고가 수 vs 신저가 수**
+- 의미: 시장 내부 강도
 
-function getRegime(score: number): Regime {
-  if (score <= 24) return 'extreme_fear';
-  if (score <= 44) return 'fear';
-  if (score <= 55) return 'neutral';
-  if (score <= 74) return 'greed';
-  return 'extreme_greed';
-}
-```
+### 3) Stock Price Breadth
+- 지표: **상승 종목 수 vs 하락 종목 수** 또는 상승/하락 거래대금 비율
+- 의미: 시장 폭
 
----
+### 4) Put/Call Options
+- 지표: **KOSPI200 옵션 Put/Call Ratio**
+- 의미: 헤지 수요와 옵션 심리
+- 비고: 데이터 수급이 어렵다면 v1에서는 placeholder 또는 phase 1.1 처리 가능
 
-## 3. 데이터베이스 스키마 (Supabase)
+### 5) Safe Haven Demand
+- 지표: **KOSPI 상대 국채 성과**
+- 예: KOSPI 수익률 - 국채 ETF 수익률
+- 의미: 위험자산 vs 안전자산 선호
 
-```sql
--- 일별 MOODEX Score 캐시
-CREATE TABLE daily_scores (
-  date         DATE PRIMARY KEY,
-  moodex_score INTEGER NOT NULL,
-  crypto_fg    INTEGER NOT NULL,
-  vix          DECIMAL(6,2) NOT NULL,
-  regime       TEXT NOT NULL,  -- extreme_fear|fear|neutral|greed|extreme_greed
-  created_at   TIMESTAMPTZ DEFAULT NOW()
-);
+### 6) Market Volatility
+- 지표: **VKOSPI**
+- 의미: 한국 시장 변동성 기반 공포/안도
 
--- 이메일 구독자
-CREATE TABLE subscribers (
-  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  email        TEXT UNIQUE NOT NULL,
-  plan         TEXT DEFAULT 'free',  -- free|pro
-  subscribed_at TIMESTAMPTZ DEFAULT NOW(),
-  is_active    BOOLEAN DEFAULT TRUE
-);
-```
+### 7) Credit Risk Demand
+- 지표: **회사채 - 국고채 스프레드**
+- 예: 회사채 AA- 3년 vs 국고채 3년
+- 의미: 신용 리스크 선호/회피
 
 ---
 
-## 4. API Routes
+## 4. 데이터 모델 개요
 
-| Route | Method | 설명 |
-|-------|--------|------|
-| `/api/score` | GET | 오늘 + 어제 MOODEX Score 반환 |
-| `/api/history?days=30` | GET | 최근 N일 히스토리 배열 반환 |
-| `/api/subscribe` | POST | 이메일 구독 등록 |
-| `/api/cron/update-score` | GET | Vercel Cron 트리거 (매일 09:00 KST) |
-
-### `/api/score` 응답 형태
-```typescript
-{
-  date: "2026-03-23",
-  score: 47,
-  regime: "neutral",
-  label: "중립",
-  interpretation: "시장은 현재 방향성을 탐색 중입니다. 극단적 신호 없음.",
-  components: {
-    cryptoFG: 52,
-    vix: 18.3
-  },
-  change: +2  // 전일 대비
-}
-```
-
-### `/api/history?days=30` 응답 형태
-```typescript
-{
-  data: [
-    { date: "2026-03-23", score: 47, regime: "neutral" },
-    { date: "2026-03-22", score: 45, regime: "neutral" },
-    ...
-  ]
-}
-```
-
----
-
-## 5. 컴포넌트 구현 명세
-
-### `ScoreHero`
-- Props: `score: number`, `regime: Regime`, `interpretation: string`, `change: number`
-- 게이지: CSS 그라디언트 (빨강 → 노랑 → 초록), 마커 위치 = `score%`
-- 레짐별 배경색: `extreme_fear`=#FEE2E2, `fear`=#FED7AA, `neutral`=#F3F4F6, `greed`=#D1FAE5, `extreme_greed`=#A7F3D0
-- 점수 변화: `change > 0` → 초록 화살표, `< 0` → 빨강
-
-### `SparklineChart`
-- Library: `recharts` LineChart
-- 7일 데이터, 점 표시 없음, 영역 채우기 (반투명)
-- 클릭 시 `/history` 이동
-
-### `RegimeLineChart` (히스토리 페이지)
-- `recharts` ComposedChart
-- 배경: `ReferenceArea` 로 레짐 구간 색상 표시
-- X축: 날짜 (MM/DD), Y축: 0–100
-- Pro 잠금: 90일+ 데이터 반환 전 서버에서 plan 체크
-
-### `AssetImplicationGrid`
-- 레짐별 하드코딩 맵 (`assetImplications.ts`)
-- 구조: `{ regime: Regime, asset: Asset, label: string, detail: string }`
-- 예: `{ regime: 'extreme_fear', asset: 'kospi', label: '역발상 매수 고려', detail: '...' }`
-
-### `AlertSubscribeCTA`
-- 이메일 input + 구독 버튼
-- POST `/api/subscribe`
-- 성공: "구독 완료! 레짐 변화 시 이메일을 보내드립니다."
-- 이미 구독: "이미 구독 중입니다."
-
----
-
-## 6. 해석 텍스트 / 콘텐츠 (하드코딩 시작)
-
-파일: `src/data/interpretations.ts`
+초기 구현은 아래 구조를 기본으로 한다.
 
 ```typescript
-export const INTERPRETATIONS: Record<Regime, RegimeContent> = {
-  extreme_fear: {
-    label: "극단적 공포",
-    color: "red",
-    interpretation: "시장에 극단적 공포가 팽배합니다. 역사적으로 이 구간은 중장기 매수 기회였으나, 추가 하락 가능성도 존재합니다.",
-    assetCards: {
-      kospi: { label: "분할 매수 기회 탐색", detail: "극단적 공포 후 3개월 평균 수익률 +12%" },
-      crypto: { label: "변동성 극대화 경계", detail: "단기 추가 하락 가능, 소규모 분할만" },
-      us_stock: { label: "공포 매수 역사적 유효", detail: "S&P500 공포 저점 평균 반등 +18%" },
-      cash_bond: { label: "현금 비중 확대 유효", detail: "방어적 자산 비중 확대 시기" }
-    },
-    guide: {
-      conservative: "추가 매수 자제, 기존 포지션 유지. 현금 확보 우선.",
-      neutral: "분할 매수 소액 시작 가능. 전체 포지션의 10–20%만.",
-      aggressive: "적극적 저점 매수 기회. 단, 손절 기준 명확히 설정."
-    }
-  },
-  // ... fear, neutral, greed, extreme_greed 동일 구조
+type SignalKey =
+  | 'momentum'
+  | 'strength'
+  | 'breadth'
+  | 'putCall'
+  | 'safeHaven'
+  | 'volatility'
+  | 'credit';
+
+type SignalReading = {
+  key: SignalKey;
+  label: string;
+  rawValue: number | null;
+  normalizedScore: number; // 0~100, 높을수록 greed
+  regime: 'extreme_fear' | 'fear' | 'neutral' | 'greed' | 'extreme_greed';
+  summary: string;
+};
+
+type DailyIndexSnapshot = {
+  date: string;
+  score: number; // K-FGI composite 0~100
+  regime: 'extreme_fear' | 'fear' | 'neutral' | 'greed' | 'extreme_greed';
+  signals: SignalReading[];
 };
 ```
 
 ---
 
-## 7. Vercel Cron 설정
+## 5. 점수 계산 원칙
 
-`vercel.json`:
-```json
-{
-  "crons": [
-    {
-      "path": "/api/cron/update-score",
-      "schedule": "0 0 * * *"
-    }
-  ]
-}
-```
-(UTC 00:00 = KST 09:00)
+### 정규화 원칙
+- 각 지표를 0~100 범위로 정규화
+- 0 = extreme fear 쪽, 100 = extreme greed 쪽
+- 동일 가중 평균을 기본값으로 사용
+- 이후 필요시 가중치 조정 가능하지만 v1은 **equal weight** 우선
 
-`/api/cron/update-score` 로직:
-1. alternative.me API → 오늘 Crypto F&G
-2. Yahoo Finance API → 오늘 VIX 종가
-3. MOODEX Score 계산
-4. Supabase `daily_scores` UPSERT
-5. 레짐 변화 감지 → 변화 있으면 Resend로 구독자 이메일 발송
-
----
-
-## 8. 이메일 알림 (Resend)
-
-발송 조건: 전일 대비 레짐 변화 발생 시
-
-이메일 템플릿 구조:
-```
-제목: [MOODEX] 시장심리가 '{이전 레짐}'에서 '{현재 레짐}'으로 변했습니다
-
-본문:
-- 오늘 MOODEX Score: 47 (중립)
-- 어제: 31 (공포) → 오늘: 47 (중립)
-- 해석: ...
-- [대시보드 보기] 버튼
-```
-
----
-
-## 9. Pro 접근 제어
-
-MVP 단순화: **쿠키 기반 (결제 완료 시 `pro_token` 쿠키 설정)**
-
+### 합성 점수
 ```typescript
-// middleware.ts
-export function middleware(req: NextRequest) {
-  const proToken = req.cookies.get('pro_token');
-  // /api/history?days=90 이상 요청 시 토큰 검증
+function calcKfgiScore(signals: SignalReading[]): number {
+  const validSignals = signals.filter((s) => Number.isFinite(s.normalizedScore));
+  if (validSignals.length === 0) return 50;
+  const avg = validSignals.reduce((sum, s) => sum + s.normalizedScore, 0) / validSignals.length;
+  return Math.round(avg);
 }
 ```
 
-결제 연동 전까지: Toss Payments Sandbox 모드로 플로우만 구현.
-실제 결제 → Phase 2에서 Webhook 처리.
+### 레짐 구간
+- 0–24: Extreme Fear
+- 25–44: Fear
+- 45–55: Neutral
+- 56–74: Greed
+- 75–100: Extreme Greed
 
 ---
 
-## 10. 폴더 구조
+## 6. 핵심 UI 표면
 
-```
-sentiment-pulse/          (← 이 빌드 브리프의 루트)
-src/
-├── app/
-│   ├── dashboard/page.tsx
-│   ├── history/page.tsx
-│   ├── guide/page.tsx
-│   ├── subscribe/page.tsx
-│   └── api/
-│       ├── score/route.ts
-│       ├── history/route.ts
-│       ├── subscribe/route.ts
-│       └── cron/update-score/route.ts
-├── components/
-│   ├── ScoreHero.tsx
-│   ├── ComponentMini.tsx
-│   ├── SparklineChart.tsx
-│   ├── RegimeLineChart.tsx
-│   ├── AssetImplicationGrid.tsx
-│   ├── QuickGuide.tsx
-│   └── AlertSubscribeCTA.tsx
-├── data/
-│   └── interpretations.ts
-├── lib/
-│   ├── moodexScore.ts       ← 점수 계산 로직
-│   ├── fetchCryptoFG.ts     ← alternative.me 연동
-│   ├── fetchVIX.ts          ← Yahoo Finance 연동
-│   ├── supabase.ts          ← Supabase 클라이언트
-│   └── resend.ts            ← Resend 이메일
-├── types/
-│   └── score.ts             ← Regime, DailyScore, Subscriber 타입
-└── vercel.json
-```
+### `/dashboard`
+핵심 목표:
+- 현재 K-FGI 점수
+- 현재 레짐
+- 7개 시그널 기여도
+- 현재와 유사한 과거 구간의 forward returns 요약
+
+주요 섹션:
+1. Hero Summary
+2. 7 Signals Today
+3. Buy Timing Analysis
+4. Sell Timing Analysis
+5. Cross-Asset Heatmap
+6. Historical Analog Cases
+7. Methodology / Disclaimer
+
+### `/history`
+- K-FGI 시계열 추이
+- 과거 extreme fear / extreme greed 이벤트 강조
+- 향후 event study 확장 고려
+
+### `/guide`
+- K-FGI 각 레짐에 대한 해석
+- 직접 투자 추천이 아니라 해석형 문구
+
+### `/subscribe`
+- 필요 시 나중에 유지하되, 현재 핵심 제품 메시지를 방해하지 않도록 단순화
 
 ---
 
-## 11. 환경 변수
+## 7. 자산 분석 범위
 
-```env
-SUPABASE_URL=
-SUPABASE_SERVICE_KEY=
-RESEND_API_KEY=
-TOSS_CLIENT_KEY=
-TOSS_SECRET_KEY=
-CRON_SECRET=                 # Vercel Cron 보안 토큰
-ALPHA_VANTAGE_KEY=           # VIX 백업 소스
-```
+초기 자산군 후보:
+- KOSPI
+- KOSDAQ
+- S&P 500 (비교용)
+- Bitcoin
+- Ethereum
+- Gold
+- Oil
+- Optional: USD/KRW 또는 DXY
 
----
+forward return horizon:
+- 7D
+- 30D
+- 90D
+- 180D
 
-## 12. MVP 완료 기준 (Acceptance Criteria)
-
-- [ ] `/dashboard` 페이지에서 오늘 MOODEX Score + 해석 텍스트 표시
-- [ ] 7일 스파크라인 차트 렌더링
-- [ ] 자산 카드 4개 레짐에 맞게 표시
-- [ ] 이메일 구독 폼 → Supabase 저장 → 확인 메시지
-- [ ] `/history` 30일 차트 무료, 90일 잠금 오버레이 표시
-- [ ] `/guide` 레짐별 대응 가이드 5개 탭 작동
-- [ ] Vercel Cron 매일 실행, Supabase 업데이트 확인
-- [ ] 레짐 변화 시 구독자 이메일 발송 확인 (Resend 로그)
-- [ ] 모바일(375px) 레이아웃 깨짐 없음
-- [ ] `npx tsc --noEmit` 에러 0개
-- [ ] Vercel 배포 성공
+표시 메트릭:
+- 평균 수익률
+- 중앙값
+- 승률
+- 최대 낙폭 / 최대 추가 하락
 
 ---
 
-## 13. 개발 순서 (권장)
+## 8. 핵심 컴포넌트
 
-**Day 1**: 스택 셋업 + Supabase 스키마 + API 연동 확인 (`fetchCryptoFG`, `fetchVIX`)
-**Day 2**: Score 계산 로직 + `/api/score` + `/api/history` 구현
-**Day 3**: `ScoreHero`, `SparklineChart`, `AssetImplicationGrid` 컴포넌트
-**Day 4**: 히스토리 페이지 + 대응 가이드 페이지 + 이메일 구독
-**Day 5**: Vercel Cron + Resend 알림 + Pro 잠금 UI + 배포 + 모바일 QA
+### `IndexHero`
+- 현재 K-FGI score
+- regime label
+- contrarian summary
+- 유사 사례 수
+
+### `SignalBreakdownGrid`
+- 7개 시그널 카드
+- raw value + normalized state + short explanation
+
+### `ContrarianAnalysisPanel`
+- buy threshold / sell threshold
+- historical case count
+- forward returns table/cards
+
+### `CrossAssetHeatmap`
+- 행: 자산
+- 열: 7D / 30D / 90D / 180D
+- 메트릭 토글: avg / median / win rate
+
+### `HistoricalAnalogs`
+- top 3 유사 과거 사례
+- 날짜 / 점수 / 이후 성과 / 유사도
+
+### `MethodologySection`
+- 7개 지표 정의
+- 정규화 방식
+- 표본 수
+- 면책 문구
+
+---
+
+## 9. 구현 우선순위
+
+### Phase A — 문서/도메인 전환
+- 기존 MOODEX / 미국 데이터 중심 설명 제거
+- K-FGI / 한국형 7-factor 설명으로 전환
+
+### Phase B — UI 구조 전환
+- dashboard를 현재 점수 위젯형에서 분석형 구조로 재편
+- 7 signals / buy vs sell / heatmap / analogs 중심으로 재배치
+
+### Phase C — 데이터 연결
+- 각 시그널 raw data source 정리
+- normalized score 계산 함수 구현
+- composite score 계산
+- 과거 사례 분류 및 forward return 계산
+
+### Phase D — 자동화
+- 일별 스냅샷 저장
+- 히스토리 갱신
+- 필요 시 cron 도입
+
+---
+
+## 10. 주의사항
+
+- 제품은 **투자 조언 앱처럼 보이면 안 된다**
+- 문구는 반드시 해석형/확률형으로 유지
+- 한국 시장용 지수라는 정체성을 UI와 문서에 일관되게 반영
+- 미국 Fear & Greed clone처럼 보이는 카피는 제거
+- KOSPI/KOSDAQ/VKOSPI/신용스프레드 등 로컬 신호의 설명력을 강조
+
+---
+
+## 11. Acceptance Criteria
+
+- [ ] 문서 전반이 K-FGI 기준으로 정렬되어 있다
+- [ ] dashboard가 한국형 7-factor 분석 대시보드 구조를 따른다
+- [ ] 7개 시그널 카드가 존재한다
+- [ ] buy/sell contrarian analysis UI가 존재한다
+- [ ] cross-asset heatmap 또는 동등 비교 UI가 존재한다
+- [ ] historical analog cases 섹션이 존재한다
+- [ ] methodology에 7개 시그널 정의와 disclaimer가 표시된다
+- [ ] 미국 데이터 설명 중심 표현이 핵심 문서에서 제거되었다
