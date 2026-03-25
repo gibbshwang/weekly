@@ -4,7 +4,7 @@ import { assetImplications, assetLabels, AssetClass } from "@/data/assetImplicat
 export default function AssetImplications() {
   const { regime } = mockScore;
   const implications = assetImplications[regime];
-  const assets: AssetClass[] = ["us_equity", "bonds_usd", "kr_equity", "crypto"];
+  const assets: AssetClass[] = ["kr_equity", "global_equity", "crypto", "commodities"];
 
   return (
     <div className="flex flex-col gap-4">

@@ -4,8 +4,8 @@ import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 
 export const metadata: Metadata = {
-  title: "MOODEX — 미국 시장 심리 지수",
-  description: "CNN 7대 지표 기반 미국 시장 심리를 해석하고 투자에 활용하는 자체 근사 지수",
+  title: "K-FGI — 한국 시장 공포·탐욕 지수",
+  description: "한국형 7개 시그널 기반 시장 심리 분석 대시보드",
 };
 
 export default function RootLayout({

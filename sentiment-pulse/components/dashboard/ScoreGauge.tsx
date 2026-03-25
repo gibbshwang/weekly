@@ -95,7 +95,7 @@ export default function ScoreGauge() {
           </span>
           <span>전일 대비</span>
           <span className="text-gray-600">·</span>
-          <span>VIX {mockScore.vix_raw}</span>
+          <span>VKOSPI {mockScore.vkospi_raw}</span>
         </div>
       </div>
     </div>

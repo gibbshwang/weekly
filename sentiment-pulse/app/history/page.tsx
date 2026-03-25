@@ -98,7 +98,7 @@ export default function HistoryPage() {
     <div className="max-w-6xl mx-auto px-4 py-6 flex flex-col gap-6">
       <div>
         <h1 className="text-2xl font-black text-white">히스토리</h1>
-        <p className="text-sm text-gray-500 mt-1">MOODEX 심리 지수 과거 데이터</p>
+        <p className="text-sm text-gray-500 mt-1">K-FGI 심리 지수 과거 데이터</p>
       </div>
 
       {/* Tab bar */}

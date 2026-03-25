@@ -1,10 +1,12 @@
 import ScoreGauge from "@/components/dashboard/ScoreGauge";
 import InterpretationCard from "@/components/dashboard/InterpretationCard";
 import ComponentGrid from "@/components/dashboard/ComponentGrid";
+import BuyTimingAnalysis from "@/components/dashboard/BuyTimingAnalysis";
+import SellTimingAnalysis from "@/components/dashboard/SellTimingAnalysis";
+import CrossAssetHeatmap from "@/components/dashboard/CrossAssetHeatmap";
 import HistoricalContext from "@/components/dashboard/HistoricalContext";
 import SparklineChart from "@/components/dashboard/SparklineChart";
-import AssetImplications from "@/components/dashboard/AssetImplications";
-import UsageGuide from "@/components/dashboard/UsageGuide";
+import MethodologyDisclaimer from "@/components/dashboard/MethodologyDisclaimer";
 import ProPreview from "@/components/dashboard/ProPreview";
 import EmailCTA from "@/components/dashboard/EmailCTA";
 import { mockScore } from "@/data/mockData";
@@ -19,7 +21,7 @@ export default function DashboardPage() {
       {/* ── Briefing headline ── */}
       <div>
         <p className="text-xs text-gray-500 uppercase tracking-widest font-medium mb-1">
-          {date} 기준 · 시장 심리 브리핑
+          {date} 기준 · K-FGI 시장 심리 브리핑
         </p>
         <h1 className="text-2xl md:text-3xl font-black text-white leading-tight">
           시장은 지금{" "}
@@ -57,20 +59,26 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ── Leading indicators spotlight ── */}
+      {/* ── 7 signals today ── */}
       <ComponentGrid />
 
-      {/* ── Historical context (supporting) ── */}
+      {/* ── Buy timing analysis ── */}
+      <BuyTimingAnalysis />
+
+      {/* ── Sell timing analysis ── */}
+      <SellTimingAnalysis />
+
+      {/* ── Cross-asset heatmap ── */}
+      <CrossAssetHeatmap />
+
+      {/* ── Historical context ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <SparklineChart />
         <HistoricalContext />
       </div>
 
-      {/* ── Full usage guide (detail) ── */}
-      <UsageGuide />
-
-      {/* ── Asset implications ── */}
-      <AssetImplications />
+      {/* ── Methodology & disclaimer ── */}
+      <MethodologyDisclaimer />
 
       {/* ── Pro + subscription (non-interrupting, at bottom) ── */}
       <div className="flex flex-col gap-4 mt-2">

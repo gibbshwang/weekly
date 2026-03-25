@@ -19,8 +19,8 @@ export default function Header() {
       <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
         {/* Logo */}
         <Link href="/dashboard" className="flex items-center gap-2">
-          <span className="text-xl font-black text-white tracking-tight">MOODEX</span>
-          <span className="hidden sm:block text-xs text-gray-500 mt-0.5">미국 시장 심리 지수</span>
+          <span className="text-xl font-black text-white tracking-tight">K-FGI</span>
+          <span className="hidden sm:block text-xs text-gray-500 mt-0.5">한국 공포·탐욕 지수</span>
         </Link>
 
         {/* Desktop nav */}
