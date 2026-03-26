@@ -1,8 +1,11 @@
-import { mockScore } from "@/data/mockData";
+import type { RegimeType } from "@/lib/types/kfgi";
 import { assetImplications, assetLabels, AssetClass } from "@/data/assetImplications";
 
-export default function AssetImplications() {
-  const { regime } = mockScore;
+interface AssetImplicationsProps {
+  regime: RegimeType;
+}
+
+export default function AssetImplications({ regime }: AssetImplicationsProps) {
   const implications = assetImplications[regime];
   const assets: AssetClass[] = ["kr_equity", "global_equity", "crypto", "commodities"];
 

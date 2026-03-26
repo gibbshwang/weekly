@@ -1,14 +1,5 @@
 import { DirectionBadge } from "@/components/ui/Badge";
-
-interface ComponentCardProps {
-  id: string;
-  label: string;
-  labelEn: string;
-  score: number | null;
-  status: "active" | "phase_1_5" | "phase_2";
-  direction: "fear" | "neutral" | "greed" | "extreme_fear" | "extreme_greed" | null;
-  note: string;
-}
+import type { SignalReading } from "@/lib/types/kfgi";
 
 const SCORE_COLOR = (score: number) => {
   if (score <= 20) return "bg-red-700";
@@ -18,16 +9,12 @@ const SCORE_COLOR = (score: number) => {
   return "bg-amber-600";
 };
 
-const PHASE_BADGE: Record<string, { label: string; className: string }> = {
-  phase_1_5: { label: "Phase 1.5 준비 중", className: "bg-amber-900/40 text-amber-500 border border-amber-800/40" },
-  phase_2: { label: "Phase 2 준비 중", className: "bg-purple-900/40 text-purple-400 border border-purple-800/40" },
-};
+type ComponentCardProps = Omit<SignalReading, 'key'>;
 
-export default function ComponentCard({ label, labelEn, score, status, direction, note }: ComponentCardProps) {
-  const isActive = status === "active";
+export default function ComponentCard({ label, labelEn, normalizedScore, direction, note }: ComponentCardProps) {
+  const hasData = Number.isFinite(normalizedScore);
 
-  if (!isActive) {
-    const badge = PHASE_BADGE[status];
+  if (!hasData) {
     return (
       <div className="bg-gray-800/40 rounded-xl p-4 border border-gray-800 opacity-60">
         <div className="flex flex-col gap-2">
@@ -38,8 +25,8 @@ export default function ComponentCard({ label, labelEn, score, status, direction
           <div className="h-1.5 bg-gray-800 rounded-full w-full" />
           <div className="flex items-center justify-between mt-1">
             <span className="text-sm text-gray-600">—</span>
-            <span className={`text-xs rounded-full px-2 py-0.5 font-medium ${badge.className}`}>
-              {badge.label}
+            <span className="text-xs rounded-full px-2 py-0.5 font-medium bg-amber-900/40 text-amber-500 border border-amber-800/40">
+              데이터 없음
             </span>
           </div>
         </div>
@@ -62,13 +49,13 @@ export default function ComponentCard({ label, labelEn, score, status, direction
         <div>
           <div className="flex justify-between items-center mb-1">
             <span className="text-xs text-gray-500">공포</span>
-            <span className="text-lg font-bold text-white">{score}</span>
+            <span className="text-lg font-bold text-white">{normalizedScore}</span>
             <span className="text-xs text-gray-500">탐욕</span>
           </div>
           <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
             <div
-              className={`h-full rounded-full transition-all ${SCORE_COLOR(score!)}`}
-              style={{ width: `${score}%` }}
+              className={`h-full rounded-full transition-all ${SCORE_COLOR(normalizedScore)}`}
+              style={{ width: `${normalizedScore}%` }}
             />
           </div>
         </div>

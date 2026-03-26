@@ -1,7 +1,13 @@
 "use client";
 
-import { mockScore } from "@/data/mockData";
 import { interpretations } from "@/data/interpretations";
+
+interface ScoreGaugeProps {
+  score: number;
+  regime: "extreme_fear" | "fear" | "neutral" | "greed" | "extreme_greed";
+  change: number;
+  vkospiRaw: number | null;
+}
 
 const REGIME_COLORS: Record<string, string> = {
   extreme_fear: "#dc2626",
@@ -19,8 +25,7 @@ function getScoreColor(score: number): string {
   return REGIME_COLORS.extreme_greed;
 }
 
-export default function ScoreGauge() {
-  const { score, regime, change, date } = mockScore;
+export default function ScoreGauge({ score, regime, change, vkospiRaw }: ScoreGaugeProps) {
   const info = interpretations[regime];
   const color = getScoreColor(score);
 
@@ -95,7 +100,7 @@ export default function ScoreGauge() {
           </span>
           <span>전일 대비</span>
           <span className="text-gray-600">·</span>
-          <span>VKOSPI {mockScore.vkospi_raw}</span>
+          <span>VKOSPI {vkospiRaw ?? "—"}</span>
         </div>
       </div>
     </div>

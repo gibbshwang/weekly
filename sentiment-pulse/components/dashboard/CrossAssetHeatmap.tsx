@@ -1,7 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { mockHeatmapData, type HeatmapMetric } from "@/data/mockData";
+import type { HeatmapData } from "@/lib/types/kfgi";
+
+interface CrossAssetHeatmapProps {
+  data: HeatmapData;
+}
 
 type Metric = "avg" | "median" | "winRate";
 const metricLabels: Record<Metric, string> = { avg: "평균 수익률", median: "중앙값", winRate: "승률" };
@@ -37,7 +41,7 @@ function formatCell(value: number, metric: Metric): string {
   return `${value > 0 ? "+" : ""}${value.toFixed(1)}%`;
 }
 
-export default function CrossAssetHeatmap() {
+export default function CrossAssetHeatmap({ data }: CrossAssetHeatmapProps) {
   const [metric, setMetric] = useState<Metric>("avg");
 
   return (
@@ -66,17 +70,17 @@ export default function CrossAssetHeatmap() {
           <thead>
             <tr className="text-xs text-gray-500">
               <th className="text-left px-4 py-2.5 font-medium">자산</th>
-              {mockHeatmapData.horizons.map((h) => (
+              {data.horizons.map((h) => (
                 <th key={h} className="text-center px-3 py-2.5 font-medium">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {mockHeatmapData.assets.map((asset) => (
+            {data.assets.map((asset) => (
               <tr key={asset} className="border-t border-gray-800/50">
                 <td className="px-4 py-2.5 font-medium text-white whitespace-nowrap">{asset}</td>
-                {mockHeatmapData.horizons.map((h) => {
-                  const cell = mockHeatmapData.data[asset][h];
+                {data.horizons.map((h) => {
+                  const cell = data.data[asset][h];
                   const v = cell[metric];
                   return (
                     <td key={h} className="px-2 py-2 text-center">

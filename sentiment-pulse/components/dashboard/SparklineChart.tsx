@@ -11,7 +11,11 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import { mockHistory } from "@/data/mockData";
+import type { HistoryPoint } from "@/lib/types/kfgi";
+
+interface SparklineChartProps {
+  history: HistoryPoint[];
+}
 
 const REGIME_COLORS: Record<string, string> = {
   extreme_fear: "#dc2626",
@@ -74,7 +78,7 @@ function formatXDate(dateStr: string) {
   return `${d.getMonth() + 1}/${d.getDate()}`;
 }
 
-export default function SparklineChart() {
+export default function SparklineChart({ history }: SparklineChartProps) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
 
@@ -104,7 +108,7 @@ export default function SparklineChart() {
       <div className="h-56 min-w-0 overflow-hidden">
         {mounted ? (
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={mockHistory} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+            <LineChart data={history} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
               <XAxis
                 dataKey="date"

@@ -1,8 +1,11 @@
-import { mockScore } from "@/data/mockData";
+import type { RegimeType } from "@/lib/types/kfgi";
 import { interpretations } from "@/data/interpretations";
 
-export default function UsageGuide() {
-  const { regime } = mockScore;
+interface UsageGuideProps {
+  regime: RegimeType;
+}
+
+export default function UsageGuide({ regime }: UsageGuideProps) {
   const info = interpretations[regime];
 
   return (

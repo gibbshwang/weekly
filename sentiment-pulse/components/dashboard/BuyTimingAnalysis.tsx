@@ -1,7 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { mockBuyTiming } from "@/data/mockData";
+import type { TimingAnalysis } from "@/lib/types/kfgi";
+
+interface BuyTimingAnalysisProps {
+  data: TimingAnalysis;
+}
 
 type Metric = "avg" | "median" | "winRate";
 const metricLabels: Record<Metric, string> = { avg: "평균", median: "중앙값", winRate: "승률" };
@@ -27,7 +31,7 @@ function formatValue(value: number, metric: Metric): string {
   return `${value > 0 ? "+" : ""}${value.toFixed(1)}%`;
 }
 
-export default function BuyTimingAnalysis() {
+export default function BuyTimingAnalysis({ data }: BuyTimingAnalysisProps) {
   const [metric, setMetric] = useState<Metric>("avg");
 
   return (
@@ -36,10 +40,10 @@ export default function BuyTimingAnalysis() {
         <div>
           <h2 className="text-base font-bold text-white">
             매수 타이밍 분석
-            <span className="text-xs font-normal text-red-400 ml-2">공포 ≤ {mockBuyTiming.threshold}</span>
+            <span className="text-xs font-normal text-red-400 ml-2">공포 ≤ {data.threshold}</span>
           </h2>
           <p className="text-xs text-gray-500 mt-0.5">
-            과거 {mockBuyTiming.caseCount}회 극단적 공포 구간 이후 자산별 성과
+            과거 {data.caseCount}회 극단적 공포 구간 이후 자산별 성과
           </p>
         </div>
         <div className="flex gap-1 bg-gray-800 rounded-lg p-0.5">
@@ -67,7 +71,7 @@ export default function BuyTimingAnalysis() {
             </tr>
           </thead>
           <tbody>
-            {mockBuyTiming.assets.map((asset) => (
+            {data.assets.map((asset) => (
               <tr key={asset.name} className="border-t border-gray-800/50">
                 <td className="px-4 py-2.5 font-medium text-white whitespace-nowrap">{asset.name}</td>
                 {horizons.map((h, i) => {

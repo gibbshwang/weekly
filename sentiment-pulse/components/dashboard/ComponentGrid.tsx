@@ -1,9 +1,11 @@
-import { mockScore } from "@/data/mockData";
 import ComponentCard from "./ComponentCard";
+import type { SignalReading } from "@/lib/types/kfgi";
 
-export default function ComponentGrid() {
-  const { components } = mockScore;
+interface ComponentGridProps {
+  signals: SignalReading[];
+}
 
+export default function ComponentGrid({ signals }: ComponentGridProps) {
   return (
     <div>
       <div className="flex items-baseline gap-3 mb-3">
@@ -11,18 +13,10 @@ export default function ComponentGrid() {
         <span className="text-xs text-gray-500">K-FGI 종합 점수를 구성하는 7개 지표</span>
       </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {components.map((c) => (
-          <ComponentCard
-            key={c.id}
-            id={c.id}
-            label={c.label}
-            labelEn={c.labelEn}
-            score={c.score}
-            status={c.status}
-            direction={c.direction}
-            note={c.note}
-          />
-        ))}
+        {signals.map((s) => {
+          const { key: signalKey, ...rest } = s;
+          return <ComponentCard key={signalKey} {...rest} />;
+        })}
       </div>
     </div>
   );

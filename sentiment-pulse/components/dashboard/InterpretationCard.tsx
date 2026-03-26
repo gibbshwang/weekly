@@ -1,8 +1,10 @@
-import { mockScore } from "@/data/mockData";
 import { interpretations } from "@/data/interpretations";
 
-export default function InterpretationCard() {
-  const { regime } = mockScore;
+interface InterpretationCardProps {
+  regime: "extreme_fear" | "fear" | "neutral" | "greed" | "extreme_greed";
+}
+
+export default function InterpretationCard({ regime }: InterpretationCardProps) {
   const info = interpretations[regime];
 
   return (

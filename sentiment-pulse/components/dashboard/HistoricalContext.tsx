@@ -1,4 +1,8 @@
-import { mockContext } from "@/data/mockData";
+import type { HistoricalContext as HistoricalContextData } from "@/lib/types/kfgi";
+
+interface HistoricalContextProps {
+  data: HistoricalContextData;
+}
 
 const REGIME_LABELS: Record<string, { label: string; color: string }> = {
   extreme_fear: { label: "극단적 공포", color: "#dc2626" },
@@ -13,8 +17,8 @@ function formatDate(dateStr: string) {
   return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")}`;
 }
 
-export default function HistoricalContext() {
-  const { percentile, similarEvents } = mockContext;
+export default function HistoricalContext({ data }: HistoricalContextProps) {
+  const { percentile, similarEvents } = data;
 
   return (
     <div className="bg-gray-900 rounded-xl p-4 md:p-6 border border-gray-800 flex flex-col gap-5">

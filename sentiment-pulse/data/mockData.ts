@@ -1,3 +1,7 @@
+import type { TimingAnalysis, HeatmapData, ForwardReturnMetric } from '@/lib/types/kfgi';
+
+export type HeatmapMetric = ForwardReturnMetric;
+
 export const mockScore = {
   date: "2026-03-24",
   score: 31,
@@ -39,7 +43,7 @@ export const mockContext = {
 };
 
 // ── Buy Timing mock (Fear ≤ 25) ──
-export const mockBuyTiming = {
+export const mockBuyTiming: TimingAnalysis = {
   threshold: 25,
   caseCount: 14,
   assets: [
@@ -54,7 +58,7 @@ export const mockBuyTiming = {
 };
 
 // ── Sell Timing mock (Greed ≥ 75) ──
-export const mockSellTiming = {
+export const mockSellTiming: TimingAnalysis = {
   threshold: 75,
   caseCount: 11,
   assets: [
@@ -69,13 +73,7 @@ export const mockSellTiming = {
 };
 
 // ── Cross-Asset Heatmap mock (current fear regime) ──
-export type HeatmapMetric = { avg: number; median: number; winRate: number };
-
-export const mockHeatmapData: {
-  assets: string[];
-  horizons: string[];
-  data: Record<string, Record<string, HeatmapMetric>>;
-} = {
+export const mockHeatmapData: HeatmapData = {
   assets: ["KOSPI", "KOSDAQ", "S&P 500", "BTC", "ETH", "Gold", "Oil"],
   horizons: ["7D", "30D", "90D", "180D"],
   data: {

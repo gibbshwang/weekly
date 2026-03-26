@@ -9,11 +9,25 @@ import SparklineChart from "@/components/dashboard/SparklineChart";
 import MethodologyDisclaimer from "@/components/dashboard/MethodologyDisclaimer";
 import ProPreview from "@/components/dashboard/ProPreview";
 import EmailCTA from "@/components/dashboard/EmailCTA";
-import { mockScore } from "@/data/mockData";
 import { interpretations } from "@/data/interpretations";
+import {
+  getCurrentSnapshot,
+  getHistory,
+  getBuyTiming,
+  getSellTiming,
+  getHeatmap,
+  getHistoricalContext,
+} from "@/lib/data/dashboardData";
 
 export default function DashboardPage() {
-  const { score, regime, change, date } = mockScore;
+  const snapshot = getCurrentSnapshot();
+  const history = getHistory();
+  const buyTiming = getBuyTiming();
+  const sellTiming = getSellTiming();
+  const heatmap = getHeatmap();
+  const context = getHistoricalContext();
+
+  const { score, regime, change, date, vkospiRaw, signals } = snapshot;
   const info = interpretations[regime];
 
   return (
@@ -36,10 +50,10 @@ export default function DashboardPage() {
       {/* ── Hero: score + driving factors + key action ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-1">
-          <ScoreGauge />
+          <ScoreGauge score={score} regime={regime} change={change} vkospiRaw={vkospiRaw} />
         </div>
         <div className="lg:col-span-2 flex flex-col gap-4">
-          <InterpretationCard />
+          <InterpretationCard regime={regime} />
           {/* Inline action strip — the "so what" */}
           <div
             className="rounded-lg px-4 py-3 border flex items-start gap-3"
@@ -60,21 +74,21 @@ export default function DashboardPage() {
       </div>
 
       {/* ── 7 signals today ── */}
-      <ComponentGrid />
+      <ComponentGrid signals={signals} />
 
       {/* ── Buy timing analysis ── */}
-      <BuyTimingAnalysis />
+      <BuyTimingAnalysis data={buyTiming} />
 
       {/* ── Sell timing analysis ── */}
-      <SellTimingAnalysis />
+      <SellTimingAnalysis data={sellTiming} />
 
       {/* ── Cross-asset heatmap ── */}
-      <CrossAssetHeatmap />
+      <CrossAssetHeatmap data={heatmap} />
 
       {/* ── Historical context ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <SparklineChart />
-        <HistoricalContext />
+        <SparklineChart history={history} />
+        <HistoricalContext data={context} />
       </div>
 
       {/* ── Methodology & disclaimer ── */}
