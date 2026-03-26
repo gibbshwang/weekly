@@ -6,6 +6,7 @@ import SellTimingAnalysis from "@/components/dashboard/SellTimingAnalysis";
 import CrossAssetHeatmap from "@/components/dashboard/CrossAssetHeatmap";
 import HistoricalContext from "@/components/dashboard/HistoricalContext";
 import SparklineChart from "@/components/dashboard/SparklineChart";
+import ContextChart from "@/components/dashboard/ContextChart";
 import MethodologyDisclaimer from "@/components/dashboard/MethodologyDisclaimer";
 import ProPreview from "@/components/dashboard/ProPreview";
 import EmailCTA from "@/components/dashboard/EmailCTA";
@@ -18,6 +19,7 @@ import {
   getHeatmap,
   getHistoricalContext,
 } from "@/lib/data/dashboardData";
+import { getKfgiPriceData } from "@/lib/data/chartData";
 
 export default function DashboardPage() {
   const snapshot = getCurrentSnapshot();
@@ -26,6 +28,7 @@ export default function DashboardPage() {
   const sellTiming = getSellTiming();
   const heatmap = getHeatmap();
   const context = getHistoricalContext();
+  const chartData = getKfgiPriceData();
 
   const { score, regime, change, date, vkospiRaw, signals } = snapshot;
   const info = interpretations[regime];
@@ -72,6 +75,9 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {/* ── Context chart: K-FGI vs asset price ── */}
+      <ContextChart data={chartData} />
 
       {/* ── 7 signals today ── */}
       <ComponentGrid signals={signals} />
