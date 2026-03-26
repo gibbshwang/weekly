@@ -5,6 +5,7 @@ import type {
   HeatmapData,
   HistoricalContext,
 } from '../types/kfgi';
+import type { KfgiPriceData, PostSignalPathData } from '../types/charts';
 import { buildSnapshot } from '../engine/composite';
 import { MOCK_RAW_TODAY, MOCK_RAW_HISTORY } from '../fixtures/mockRawSignals';
 
@@ -15,6 +16,12 @@ import {
   mockHeatmapData,
   mockContext,
 } from '@/data/mockData';
+
+// Chart data functions
+import {
+  getKfgiPriceData as _getKfgiPriceData,
+  getPostSignalPaths as _getPostSignalPaths,
+} from './chartData';
 
 // ── Build 30-day history from raw signals via engine ──
 
@@ -82,4 +89,18 @@ export function getHeatmap(): HeatmapData {
  */
 export function getHistoricalContext(): HistoricalContext {
   return mockContext;
+}
+
+/**
+ * Precomputed K-FGI vs asset price data for Chart A.
+ */
+export function getChartPriceData(): KfgiPriceData {
+  return _getKfgiPriceData();
+}
+
+/**
+ * Post-signal price paths for Chart B mini charts.
+ */
+export function getPostSignalPaths(type: 'buy' | 'sell'): PostSignalPathData[] {
+  return _getPostSignalPaths(type);
 }

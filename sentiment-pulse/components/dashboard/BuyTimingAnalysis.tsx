@@ -2,9 +2,12 @@
 
 import { useState } from "react";
 import type { TimingAnalysis } from "@/lib/types/kfgi";
+import type { PostSignalPathData } from "@/lib/types/charts";
+import PostSignalPathChart from "./PostSignalPathChart";
 
 interface BuyTimingAnalysisProps {
   data: TimingAnalysis;
+  pathData?: PostSignalPathData[];
 }
 
 type Metric = "avg" | "median" | "winRate";
@@ -31,7 +34,7 @@ function formatValue(value: number, metric: Metric): string {
   return `${value > 0 ? "+" : ""}${value.toFixed(1)}%`;
 }
 
-export default function BuyTimingAnalysis({ data }: BuyTimingAnalysisProps) {
+export default function BuyTimingAnalysis({ data, pathData }: BuyTimingAnalysisProps) {
   const [metric, setMetric] = useState<Metric>("avg");
 
   return (
@@ -89,6 +92,12 @@ export default function BuyTimingAnalysis({ data }: BuyTimingAnalysisProps) {
           </tbody>
         </table>
       </div>
+      {/* Post-signal price path mini chart */}
+      {pathData && pathData.length > 0 && (
+        <div className="px-4 md:px-6 py-4 border-t border-gray-800">
+          <PostSignalPathChart data={pathData[0]} type="buy" />
+        </div>
+      )}
     </div>
   );
 }

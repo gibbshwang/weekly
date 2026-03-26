@@ -18,6 +18,7 @@ import {
   getSellTiming,
   getHeatmap,
   getHistoricalContext,
+  getPostSignalPaths,
 } from "@/lib/data/dashboardData";
 import { getKfgiPriceData } from "@/lib/data/chartData";
 
@@ -29,6 +30,8 @@ export default function DashboardPage() {
   const heatmap = getHeatmap();
   const context = getHistoricalContext();
   const chartData = getKfgiPriceData();
+  const buyPaths = getPostSignalPaths('buy');
+  const sellPaths = getPostSignalPaths('sell');
 
   const { score, regime, change, date, vkospiRaw, signals } = snapshot;
   const info = interpretations[regime];
@@ -83,10 +86,10 @@ export default function DashboardPage() {
       <ComponentGrid signals={signals} />
 
       {/* ── Buy timing analysis ── */}
-      <BuyTimingAnalysis data={buyTiming} />
+      <BuyTimingAnalysis data={buyTiming} pathData={buyPaths} />
 
       {/* ── Sell timing analysis ── */}
-      <SellTimingAnalysis data={sellTiming} />
+      <SellTimingAnalysis data={sellTiming} pathData={sellPaths} />
 
       {/* ── Cross-asset heatmap ── */}
       <CrossAssetHeatmap data={heatmap} />
