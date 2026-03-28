@@ -30,8 +30,8 @@ export default function ScoreGauge({ score, regime, change, vkospiRaw }: ScoreGa
 
   // SVG arc gauge parameters
   const cx = 160;
-  const cy = 150;
-  const r = 110;
+  const cy = 140;
+  const r = 100;
   const startAngle = -210;
   const endAngle = 30;
   const totalAngle = endAngle - startAngle;
@@ -48,7 +48,7 @@ export default function ScoreGauge({ score, regime, change, vkospiRaw }: ScoreGa
   };
 
   const needleAngle = startAngle + (score / 100) * totalAngle;
-  const needleLen = 90;
+  const needleLen = 75;
   const needleX = cx + needleLen * Math.cos(toRad(needleAngle));
   const needleY = cy + needleLen * Math.sin(toRad(needleAngle));
 
@@ -73,21 +73,26 @@ export default function ScoreGauge({ score, regime, change, vkospiRaw }: ScoreGa
     >
       {/* SVG Gauge */}
       <div className="relative w-full max-w-xs mx-auto">
-        <svg viewBox="0 0 320 180" className="w-full">
-          <path d={arcPath(startAngle, endAngle, r)} fill="none" stroke="var(--border)" strokeWidth="18" strokeLinecap="round" />
+        <svg viewBox="0 0 320 210" className="w-full">
+          {/* Background arc */}
+          <path d={arcPath(startAngle, endAngle, r)} fill="none" stroke="var(--border)" strokeWidth="14" strokeLinecap="round" />
+          {/* Zone colors */}
           {zones.map((z, i) => (
-            <path key={i} d={zoneArcPath(z.from, z.to, r)} fill="none" stroke={z.color} strokeWidth="16" opacity="0.4" />
+            <path key={i} d={zoneArcPath(z.from, z.to, r)} fill="none" stroke={z.color} strokeWidth="12" opacity="0.35" />
           ))}
-          <path d={arcPath(startAngle, needleAngle, r)} fill="none" stroke={color} strokeWidth="16" strokeLinecap="round" />
-          <line x1={cx} y1={cy} x2={needleX} y2={needleY} stroke="var(--text-1)" strokeWidth="2.5" strokeLinecap="round" />
-          <circle cx={cx} cy={cy} r="7" fill="var(--text-1)" />
-          <circle cx={cx} cy={cy} r="4" fill={color} />
+          {/* Active arc */}
+          <path d={arcPath(startAngle, needleAngle, r)} fill="none" stroke={color} strokeWidth="12" strokeLinecap="round" />
+          {/* Needle */}
+          <line x1={cx} y1={cy} x2={needleX} y2={needleY} stroke="var(--text-1)" strokeWidth="2" strokeLinecap="round" />
+          <circle cx={cx} cy={cy} r="5" fill="var(--text-1)" />
+          <circle cx={cx} cy={cy} r="3" fill={color} />
+          {/* Score number — pushed down with breathing room */}
           <text
-            x={cx} y={cy + 30}
+            x={cx} y={cy + 48}
             textAnchor="middle"
             fill={color}
-            fontSize="36"
-            fontWeight="700"
+            fontSize="40"
+            fontWeight="800"
             style={{ fontFamily: "var(--font-data)", fontVariantNumeric: "tabular-nums" }}
           >
             {score}
