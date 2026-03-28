@@ -15,7 +15,17 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ko" className="h-full">
-      <body className="min-h-full flex flex-col bg-gray-950 text-white">
+      <head>
+        <link
+          rel="stylesheet"
+          href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css"
+        />
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500&display=swap"
+        />
+      </head>
+      <body className="min-h-full flex flex-col" style={{ background: 'var(--bg)', color: 'var(--text-1)' }}>
         <Header />
         <main className="flex-1">{children}</main>
         <Footer />

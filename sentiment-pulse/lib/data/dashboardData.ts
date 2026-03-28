@@ -6,6 +6,8 @@ import type {
   HistoricalContext,
 } from '../types/kfgi';
 import type { KfgiPriceData, PostSignalPathData } from '../types/charts';
+import type { SimilarCaseWithReturns, ConsensusSummary, CaseReturn } from '../types/narrative';
+import { NARRATIVE_ASSETS } from '../types/narrative';
 import { buildSnapshot } from '../engine/composite';
 import { MOCK_RAW_TODAY, MOCK_RAW_HISTORY } from '../fixtures/mockRawSignals';
 
@@ -16,6 +18,8 @@ import {
   mockHeatmapData,
   mockContext,
 } from '@/data/mockData';
+
+import { mockSimilarCases } from '@/data/mockNarrativeData';
 
 // Chart data functions
 import {
@@ -103,4 +107,75 @@ export function getChartPriceData(): KfgiPriceData {
  */
 export function getPostSignalPaths(type: 'buy' | 'sell'): PostSignalPathData[] {
   return _getPostSignalPaths(type);
+}
+
+/**
+ * Similar cases with per-asset forward returns.
+ * Prototype: returns hardcoded mock data.
+ * Production: will compute from K-FGI history + asset price series.
+ */
+export function getSimilarCaseReturns(): SimilarCaseWithReturns[] {
+  return mockSimilarCases;
+}
+
+/**
+ * Consensus summary across similar cases.
+ * Computes win rate, average returns, and headline from case data.
+ */
+export function getConsensusSummary(cases: SimilarCaseWithReturns[]): ConsensusSummary {
+  if (cases.length === 0) {
+    return {
+      winRate90d: 0,
+      avgReturns: NARRATIVE_ASSETS.map(asset => ({
+        asset,
+        return30d: null,
+        return60d: null,
+        return90d: null,
+      })),
+      totalCases: 0,
+      headline: "유사 사례가 충분하지 않습니다",
+    };
+  }
+
+  // Count KOSPI 90-day positive cases for win rate
+  let winCount = 0;
+  for (const c of cases) {
+    const kospi = c.returns.find(r => r.asset === 'KOSPI');
+    if (kospi && kospi.return90d !== null && kospi.return90d > 0) {
+      winCount++;
+    }
+  }
+  const winRate90d = winCount / cases.length;
+
+  // Compute per-asset average returns
+  const avgReturns: CaseReturn[] = NARRATIVE_ASSETS.map(asset => {
+    const assetReturns = cases
+      .map(c => c.returns.find(r => r.asset === asset))
+      .filter((r): r is CaseReturn => r !== undefined);
+
+    if (assetReturns.length === 0) {
+      return { asset, return30d: null, return60d: null, return90d: null };
+    }
+
+    const avg = (vals: (number | null)[]) => {
+      const valid = vals.filter((v): v is number => v !== null);
+      return valid.length > 0 ? valid.reduce((a, b) => a + b, 0) / valid.length : null;
+    };
+
+    return {
+      asset,
+      return30d: avg(assetReturns.map(r => r.return30d)),
+      return60d: avg(assetReturns.map(r => r.return60d)),
+      return90d: avg(assetReturns.map(r => r.return90d)),
+    };
+  });
+
+  const headline = `${cases.length}건 중 ${winCount}건에서 90일 후 KOSPI 양수 수익률`;
+
+  return {
+    winRate90d,
+    avgReturns,
+    totalCases: cases.length,
+    headline,
+  };
 }
