@@ -15,12 +15,15 @@ export default function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
 
   return (
-    <header className="sticky top-0 z-50 bg-gray-950/95 backdrop-blur border-b border-gray-800">
-      <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
+    <header
+      className="sticky top-0 z-50 backdrop-blur"
+      style={{ background: 'color-mix(in srgb, var(--bg) 95%, transparent)', borderBottom: '1px solid var(--border)' }}
+    >
+      <div className="max-w-[1280px] mx-auto px-4 md:px-6 h-14 flex items-center justify-between">
         {/* Logo */}
         <Link href="/dashboard" className="flex items-center gap-2">
-          <span className="text-xl font-black text-white tracking-tight">K-FGI</span>
-          <span className="hidden sm:block text-xs text-gray-500 mt-0.5">한국 공포·탐욕 지수</span>
+          <span className="text-xl font-display font-black tracking-tight" style={{ color: 'var(--text-1)' }}>K-FGI</span>
+          <span className="hidden sm:block text-xs mt-0.5" style={{ color: 'var(--text-3)' }}>한국 공포·탐욕 지수</span>
         </Link>
 
         {/* Desktop nav */}
@@ -29,34 +32,23 @@ export default function Header() {
             <Link
               key={link.href}
               href={link.href}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                pathname === link.href
-                  ? "bg-gray-800 text-white"
-                  : "text-gray-400 hover:text-white hover:bg-gray-800/50"
-              }`}
+              className="px-3 py-1.5 rounded-[var(--radius-md)] text-sm font-medium transition-colors"
+              style={{
+                background: pathname === link.href ? 'var(--surface)' : 'transparent',
+                color: pathname === link.href ? 'var(--text-1)' : 'var(--text-3)',
+              }}
             >
               {link.label}
             </Link>
           ))}
-          <Link
-            href="/subscribe"
-            className="ml-2 px-4 py-1.5 bg-amber-600 hover:bg-amber-500 text-white text-sm font-semibold rounded-lg transition-colors"
-          >
-            PRO 업그레이드
-          </Link>
         </nav>
 
         {/* Mobile menu button */}
         <div className="flex md:hidden items-center gap-2">
-          <Link
-            href="/subscribe"
-            className="px-3 py-1 bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold rounded-lg transition-colors"
-          >
-            PRO
-          </Link>
           <button
             onClick={() => setMenuOpen(!menuOpen)}
-            className="p-2 text-gray-400 hover:text-white"
+            className="p-2 transition-colors"
+            style={{ color: 'var(--text-3)' }}
             aria-label="메뉴"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -72,17 +64,20 @@ export default function Header() {
 
       {/* Mobile menu */}
       {menuOpen && (
-        <div className="md:hidden border-t border-gray-800 bg-gray-950 px-4 py-3 flex flex-col gap-1">
+        <div
+          className="md:hidden px-4 py-3 flex flex-col gap-1"
+          style={{ borderTop: '1px solid var(--border)', background: 'var(--bg)' }}
+        >
           {navLinks.map((link) => (
             <Link
               key={link.href}
               href={link.href}
               onClick={() => setMenuOpen(false)}
-              className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                pathname === link.href
-                  ? "bg-gray-800 text-white"
-                  : "text-gray-400 hover:text-white hover:bg-gray-800/50"
-              }`}
+              className="px-3 py-2 rounded-[var(--radius-md)] text-sm font-medium transition-colors"
+              style={{
+                background: pathname === link.href ? 'var(--surface)' : 'transparent',
+                color: pathname === link.href ? 'var(--text-1)' : 'var(--text-3)',
+              }}
             >
               {link.label}
             </Link>

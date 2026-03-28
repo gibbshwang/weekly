@@ -60,8 +60,11 @@ function CustomTooltip({ active, payload }: CustomTooltipProps) {
   const d = payload[0].payload;
   const color = getScoreColor(d.score);
   return (
-    <div className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs">
-      <p className="text-gray-400">{d.date}</p>
+    <div
+      className="rounded-[var(--radius-md)] px-3 py-2 text-xs font-data"
+      style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
+    >
+      <p style={{ color: 'var(--text-3)' }}>{d.date}</p>
       <p className="font-bold mt-0.5" style={{ color }}>
         {d.score} —{" "}
         {d.regime === "extreme_fear" ? "극단적 공포" :
@@ -83,10 +86,13 @@ export default function SparklineChart({ history }: SparklineChartProps) {
   useEffect(() => { setMounted(true); }, []);
 
   return (
-    <div className="bg-gray-900 rounded-xl p-4 md:p-5 border border-gray-800 flex flex-col gap-3">
+    <div
+      className="rounded-[var(--radius-lg)] p-4 md:p-5 border flex flex-col gap-3"
+      style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
+    >
       <div>
-        <h2 className="text-sm font-bold text-white">30일 추이</h2>
-        <p className="text-xs text-gray-600 mt-0.5">최근 30거래일 심리 지수 변화</p>
+        <h2 className="font-body text-sm font-semibold" style={{ color: 'var(--text-1)' }}>30일 추이</h2>
+        <p className="text-xs mt-0.5" style={{ color: 'var(--text-3)' }}>최근 30거래일 심리 지수 변화</p>
       </div>
 
       {/* Legend */}
@@ -100,7 +106,7 @@ export default function SparklineChart({ history }: SparklineChartProps) {
         ].map((z) => (
           <div key={z.label} className="flex items-center gap-1.5">
             <div className="w-2 h-2 rounded-full" style={{ backgroundColor: z.color }} />
-            <span className="text-xs text-gray-500">{z.label}</span>
+            <span className="text-xs" style={{ color: 'var(--text-3)' }}>{z.label}</span>
           </div>
         ))}
       </div>
@@ -109,18 +115,18 @@ export default function SparklineChart({ history }: SparklineChartProps) {
         {mounted ? (
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={history} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#1e1e26" />
               <XAxis
                 dataKey="date"
                 tickFormatter={formatXDate}
-                tick={{ fill: "#6b7280", fontSize: 10 }}
+                tick={{ fill: "#4a4a54", fontSize: 10 }}
                 tickLine={false}
-                axisLine={{ stroke: "#374151" }}
+                axisLine={{ stroke: "#1e1e26" }}
                 interval={4}
               />
               <YAxis
                 domain={[0, 100]}
-                tick={{ fill: "#6b7280", fontSize: 10 }}
+                tick={{ fill: "#4a4a54", fontSize: 10 }}
                 tickLine={false}
                 axisLine={false}
               />
@@ -140,16 +146,16 @@ export default function SparklineChart({ history }: SparklineChartProps) {
             </LineChart>
           </ResponsiveContainer>
         ) : (
-          <div className="w-full h-full bg-gray-800/30 rounded animate-pulse" />
+          <div className="w-full h-full rounded animate-pulse" style={{ background: 'var(--border)' }} />
         )}
       </div>
 
-      <div className="flex justify-between text-xs text-gray-600 px-1">
-        <span className="text-red-700">0 극단적공포</span>
-        <span className="text-red-400">20 공포</span>
-        <span className="text-gray-500">40 중립</span>
-        <span className="text-green-500">60 탐욕</span>
-        <span className="text-amber-600">80 극단적탐욕</span>
+      <div className="flex justify-between text-xs font-data px-1">
+        <span style={{ color: '#dc2626' }}>0 극단적공포</span>
+        <span style={{ color: '#ef4444' }}>20 공포</span>
+        <span style={{ color: '#6b7280' }}>40 중립</span>
+        <span style={{ color: '#22c55e' }}>60 탐욕</span>
+        <span style={{ color: '#d97706' }}>80 극단적탐욕</span>
       </div>
     </div>
   );

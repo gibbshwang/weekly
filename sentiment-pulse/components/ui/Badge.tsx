@@ -5,36 +5,48 @@ interface BadgeProps {
   size?: "sm" | "md";
 }
 
-const regimeConfig: Record<Regime, { label: string; className: string }> = {
-  extreme_fear: { label: "극단적 공포", className: "bg-red-700 text-white" },
-  fear: { label: "공포", className: "bg-red-500 text-white" },
-  neutral: { label: "중립", className: "bg-gray-500 text-white" },
-  greed: { label: "탐욕", className: "bg-green-500 text-white" },
-  extreme_greed: { label: "극단적 탐욕", className: "bg-amber-600 text-white" },
+const REGIME_COLORS: Record<Regime, string> = {
+  extreme_fear: "var(--extreme-fear)",
+  fear: "var(--fear)",
+  neutral: "var(--neutral)",
+  greed: "var(--greed)",
+  extreme_greed: "var(--extreme-greed)",
+};
+
+const regimeLabels: Record<Regime, string> = {
+  extreme_fear: "극단적 공포",
+  fear: "공포",
+  neutral: "중립",
+  greed: "탐욕",
+  extreme_greed: "극단적 탐욕",
 };
 
 export function Badge({ regime, size = "md" }: BadgeProps) {
-  const config = regimeConfig[regime];
+  const color = REGIME_COLORS[regime];
   const sizeClass = size === "sm" ? "px-2 py-0.5 text-xs" : "px-3 py-1 text-sm";
   return (
-    <span className={`inline-flex items-center rounded-full font-semibold ${sizeClass} ${config.className}`}>
-      {config.label}
+    <span
+      className={`inline-flex items-center rounded-full font-semibold font-data ${sizeClass}`}
+      style={{ background: color, color: '#fff' }}
+    >
+      {regimeLabels[regime]}
     </span>
   );
 }
 
 export function DirectionBadge({ direction }: { direction: "fear" | "neutral" | "greed" | "extreme_fear" | "extreme_greed" }) {
-  const config: Record<string, { label: string; className: string }> = {
-    extreme_fear: { label: "극단적 공포", className: "bg-red-700/20 text-red-400 border border-red-700/40" },
-    fear: { label: "공포", className: "bg-red-500/20 text-red-400 border border-red-500/40" },
-    neutral: { label: "중립", className: "bg-gray-500/20 text-gray-400 border border-gray-500/40" },
-    greed: { label: "탐욕", className: "bg-green-500/20 text-green-400 border border-green-500/40" },
-    extreme_greed: { label: "극단적 탐욕", className: "bg-amber-600/20 text-amber-400 border border-amber-600/40" },
-  };
-  const c = config[direction] ?? config.neutral;
+  const color = REGIME_COLORS[direction] ?? REGIME_COLORS.neutral;
+  const label = regimeLabels[direction] ?? "중립";
   return (
-    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${c.className}`}>
-      {c.label}
+    <span
+      className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium font-data"
+      style={{
+        background: `color-mix(in srgb, ${color} 15%, transparent)`,
+        color: color,
+        border: `1px solid color-mix(in srgb, ${color} 30%, transparent)`,
+      }}
+    >
+      {label}
     </span>
   );
 }
