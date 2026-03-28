@@ -1,4 +1,5 @@
 import type {
+  SignalKey,
   DailyIndexSnapshot,
   HistoryPoint,
   TimingAnalysis,
@@ -9,7 +10,8 @@ import type { KfgiPriceData, PostSignalPathData } from '../types/charts';
 import type { SimilarCaseWithReturns, ConsensusSummary, CaseReturn } from '../types/narrative';
 import { NARRATIVE_ASSETS } from '../types/narrative';
 import { buildSnapshot } from '../engine/composite';
-import { MOCK_RAW_TODAY, MOCK_RAW_HISTORY } from '../fixtures/mockRawSignals';
+import { MOCK_RAW_HISTORY } from '../fixtures/mockRawSignals';
+import { fetchSignalsWithStatus } from '../api/fetchSignals';
 
 // Static mock fallbacks for timing/heatmap (need long history to compute from engine)
 import {
@@ -42,6 +44,8 @@ function buildHistory(): HistoryPoint[] {
 
 let _snapshot: DailyIndexSnapshot | null = null;
 let _history: HistoryPoint[] | null = null;
+let _liveSignals: SignalKey[] = [];
+let _mockSignals: SignalKey[] = [];
 
 function getHistoryInternal(): HistoryPoint[] {
   if (!_history) {
@@ -50,13 +54,27 @@ function getHistoryInternal(): HistoryPoint[] {
   return _history;
 }
 
-export function getCurrentSnapshot(): DailyIndexSnapshot {
+export async function getCurrentSnapshot(): Promise<DailyIndexSnapshot> {
   if (!_snapshot) {
     const history = getHistoryInternal();
     const prevScore = history.length >= 2 ? history[history.length - 2].score : null;
-    _snapshot = buildSnapshot('2026-03-24', MOCK_RAW_TODAY, prevScore);
+
+    // Fetch live signals from APIs (with mock fallback per signal)
+    const { signals, live, mock } = await fetchSignalsWithStatus();
+    _liveSignals = live;
+    _mockSignals = mock;
+
+    const today = new Date().toISOString().slice(0, 10);
+    _snapshot = buildSnapshot(today, signals, prevScore);
   }
   return _snapshot;
+}
+
+/**
+ * Returns which signals are live vs using mock fallback.
+ */
+export function getSignalSources(): { live: SignalKey[]; mock: SignalKey[] } {
+  return { live: _liveSignals, mock: _mockSignals };
 }
 
 export function getHistory(): HistoryPoint[] {

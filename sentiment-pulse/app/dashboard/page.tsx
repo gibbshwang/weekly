@@ -11,8 +11,8 @@ import {
 } from "@/lib/data/dashboardData";
 import { getKfgiPriceData } from "@/lib/data/chartData";
 
-export default function DashboardPage() {
-  const snapshot = getCurrentSnapshot();
+export default async function DashboardPage() {
+  const snapshot = await getCurrentSnapshot();
   const context = getHistoricalContext();
   const similarCases = getSimilarCaseReturns();
   const consensus = getConsensusSummary(similarCases);
