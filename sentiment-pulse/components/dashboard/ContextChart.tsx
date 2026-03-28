@@ -57,7 +57,7 @@ function CustomTooltip({ active, payload, selectedAsset }: CustomTooltipProps) {
       style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
     >
       <p style={{ color: 'var(--text-3)' }}>{pt.date}</p>
-      <p className="font-semibold mt-1" style={{ color: '#60a5fa' }}>K-FGI {pt.score}</p>
+      <p className="font-semibold mt-1" style={{ color: '#60a5fa' }}>Fear & Greed {pt.score}</p>
       <p className="font-semibold" style={{ color: 'var(--greed)' }}>
         {selectedAsset} {pt.priceIndex.toFixed(1)}
       </p>
@@ -97,7 +97,7 @@ export default function ContextChart({ data }: ContextChartProps) {
         <div>
           <h2 className="font-body text-sm font-semibold" style={{ color: 'var(--text-1)' }}>시장 심리 vs 자산 가격</h2>
           <p className="text-xs mt-0.5" style={{ color: 'var(--text-3)' }}>
-            K-FGI 지수와 자산 가격(리베이스) 비교
+            심리지수와 자산 가격(리베이스) 비교
           </p>
         </div>
 
@@ -178,7 +178,7 @@ export default function ContextChart({ data }: ContextChartProps) {
                 stroke="#60a5fa"
                 strokeWidth={2}
                 dot={false}
-                name="K-FGI"
+                name="Fear & Greed"
               />
               <Line
                 yAxisId="right"
@@ -204,7 +204,7 @@ export default function ContextChart({ data }: ContextChartProps) {
       <div className="flex gap-4 text-xs">
         <div className="flex items-center gap-1.5">
           <div className="w-3 h-0.5 rounded" style={{ background: '#60a5fa' }} />
-          <span style={{ color: 'var(--text-3)' }}>K-FGI (0–100)</span>
+          <span style={{ color: 'var(--text-3)' }}>Fear & Greed (0–100)</span>
         </div>
         <div className="flex items-center gap-1.5">
           <div className="w-3 h-0.5 rounded" style={{ background: '#22c55e' }} />

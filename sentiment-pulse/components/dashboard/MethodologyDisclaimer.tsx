@@ -20,7 +20,7 @@ export default function MethodologyDisclaimer() {
       >
         <div>
           <h2 className="font-body text-base font-semibold" style={{ color: 'var(--text-1)' }}>산출 방법론</h2>
-          <p className="text-xs mt-0.5" style={{ color: 'var(--text-3)' }}>K-FGI 7개 시그널 정의 및 합성 방법</p>
+          <p className="text-xs mt-0.5" style={{ color: 'var(--text-3)' }}>Fear & Greed Index 7개 시그널 정의 및 합성 방법</p>
         </div>
         <svg
           className="w-5 h-5 transition-transform flex-shrink-0"
@@ -61,7 +61,7 @@ export default function MethodologyDisclaimer() {
           {/* Methodology notes */}
           <div className="flex flex-col gap-2 text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>
             <p><span className="font-medium" style={{ color: 'var(--text-2)' }}>정규화:</span> 각 시그널의 원시값을 과거 분포 기준 0–100 범위로 변환합니다. 0은 극단적 공포, 100은 극단적 탐욕입니다.</p>
-            <p><span className="font-medium" style={{ color: 'var(--text-2)' }}>합성 점수:</span> 7개 시그널의 동일 가중 평균으로 K-FGI 종합 점수를 산출합니다.</p>
+            <p><span className="font-medium" style={{ color: 'var(--text-2)' }}>합성 점수:</span> 7개 시그널의 동일 가중 평균으로 Fear & Greed 종합 점수를 산출합니다.</p>
             <p><span className="font-medium" style={{ color: 'var(--text-2)' }}>레짐 구간:</span> 0–20 극단적 공포 · 21–40 공포 · 41–60 중립 · 61–80 탐욕 · 81–100 극단적 탐욕</p>
           </div>
 

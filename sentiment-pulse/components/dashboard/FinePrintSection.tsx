@@ -67,14 +67,14 @@ export default function FinePrintSection({ signals, chartData }: FinePrintSectio
 
       <CollapsibleSection
         title="7대 시그널 상세"
-        subtitle="K-FGI를 구성하는 7개 시그널의 개별 점수"
+        subtitle="Fear & Greed 지수를 구성하는 7개 시그널의 개별 점수"
       >
         <ComponentGrid signals={signals} />
       </CollapsibleSection>
 
       <CollapsibleSection
-        title="K-FGI vs 자산가격 차트"
-        subtitle="K-FGI 지수와 주요 자산가격의 상관관계"
+        title="Fear & Greed vs 자산가격 차트"
+        subtitle="심리지수와 주요 자산가격의 상관관계"
       >
         <ContextChart data={chartData} />
       </CollapsibleSection>

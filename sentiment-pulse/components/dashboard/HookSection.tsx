@@ -33,7 +33,7 @@ export default function HookSection({
         className="font-mono text-[11px] tracking-[0.08em] uppercase mb-4"
         style={{ color: 'var(--text-3)' }}
       >
-        {date} 기준 · K-FGI 시장 심리 브리핑
+        {date} 기준 · Korea Fear & Greed 시장 심리 브리핑
       </p>
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_200px] gap-4">

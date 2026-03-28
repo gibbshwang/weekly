@@ -4,7 +4,7 @@ import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 
 export const metadata: Metadata = {
-  title: "K-FGI — 한국 시장 공포·탐욕 지수",
+  title: "Korea Fear & Greed Index — 한국 시장 공포·탐욕 지수",
   description: "한국형 7개 시그널 기반 시장 심리 분석 대시보드",
 };
 

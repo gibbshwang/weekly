@@ -97,7 +97,7 @@ export default function ScoreGauge({ score, regime, change, vkospiRaw }: ScoreGa
 
       {/* Metadata */}
       <div className="flex flex-col items-center gap-1 -mt-1">
-        <span className="text-[13px]" style={{ color: 'var(--text-3)' }}>K-FGI Score</span>
+        <span className="text-[13px]" style={{ color: 'var(--text-3)' }}>Fear & Greed Score</span>
         <span
           className="font-data text-[13px]"
           style={{ color: change < 0 ? 'var(--fear)' : 'var(--greed)' }}

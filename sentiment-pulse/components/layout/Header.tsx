@@ -22,8 +22,8 @@ export default function Header() {
       <div className="max-w-[1280px] mx-auto px-4 md:px-6 h-14 flex items-center justify-between">
         {/* Logo */}
         <Link href="/dashboard" className="flex items-center gap-2">
-          <span className="text-xl font-display font-black tracking-tight" style={{ color: 'var(--text-1)' }}>K-FGI</span>
-          <span className="hidden sm:block text-xs mt-0.5" style={{ color: 'var(--text-3)' }}>한국 공포·탐욕 지수</span>
+          <span className="text-xl font-display font-black tracking-tight" style={{ color: 'var(--text-1)' }}>Korea F&G</span>
+          <span className="hidden sm:block text-xs mt-0.5" style={{ color: 'var(--text-3)' }}>Korea Fear & Greed Index</span>
         </Link>
 
         {/* Desktop nav */}
