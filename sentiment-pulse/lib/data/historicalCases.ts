@@ -255,15 +255,14 @@ const ALL_CASES: (HistoricalEvent & {
 export const ALL_CASES_FOR_ANALYSIS = ALL_CASES;
 
 /**
- * Find similar historical cases within ±15 points of current score.
- * Returns up to 3 closest matches.
+ * Find ALL historical cases within ±15 points of current score.
+ * Used for consensus computation across the full matching pool.
  */
-export function findSimilarCases(currentScore: number): SimilarCaseWithReturns[] {
+export function findAllMatchingCases(currentScore: number): SimilarCaseWithReturns[] {
   const range = 15;
   const matches = ALL_CASES
     .filter(c => Math.abs(c.score - currentScore) <= range)
-    .sort((a, b) => Math.abs(a.score - currentScore) - Math.abs(b.score - currentScore))
-    .slice(0, 3);
+    .sort((a, b) => Math.abs(a.score - currentScore) - Math.abs(b.score - currentScore));
 
   return matches.map(c => ({
     date: c.date,
@@ -273,6 +272,14 @@ export function findSimilarCases(currentScore: number): SimilarCaseWithReturns[]
     returns: c.returns,
     pricePath: c.pricePath,
   }));
+}
+
+/**
+ * Find similar historical cases within ±15 points of current score.
+ * Returns up to 3 closest matches for display as representative cases.
+ */
+export function findSimilarCases(currentScore: number): SimilarCaseWithReturns[] {
+  return findAllMatchingCases(currentScore).slice(0, 3);
 }
 
 /**

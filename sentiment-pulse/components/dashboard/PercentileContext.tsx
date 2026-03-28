@@ -38,15 +38,15 @@ export default function PercentileContext({ percentile, totalOccurrences, curren
 
       {/* Context text */}
       <p className="text-sm leading-relaxed" style={{ color: 'var(--text-2)' }}>
-        현재 지수는 10년 중{" "}
+        과거 10년간 현재보다 낮았던 날이{" "}
         <span className="font-bold font-data" style={{ color: 'var(--fear)' }}>
-          하위 {percentile}%
+          {percentile}%
         </span>
-        {" "}구간에 위치합니다.
+        입니다.
         {totalOccurrences > 0 && (
-          <> 2014년 이후 유사 구간 진입은 총{" "}
-            <span className="font-bold font-data" style={{ color: 'var(--text-1)' }}>{totalOccurrences}회</span>
-            {" "}있었습니다.
+          <> 2014년 이후 유사 구간(±15점) 진입은 총{" "}
+            <span className="font-bold font-data" style={{ color: 'var(--text-1)' }}>{totalOccurrences}건</span>
+            {" "}확인됩니다.
           </>
         )}
       </p>

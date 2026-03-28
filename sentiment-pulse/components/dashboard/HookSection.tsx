@@ -36,7 +36,10 @@ export default function HookSection({
         {date} 기준 · Korea Fear & Greed 시장 심리 브리핑
       </p>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_200px] gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-[200px_1fr] gap-4">
+        {/* Score gauge — 점수가 먼저 */}
+        <ScoreGauge score={score} regime={regime} change={change} vkospiRaw={vkospiRaw} />
+
         {/* Action guide */}
         <div
           className="rounded-[var(--radius-lg)] p-5 md:p-6 border"
@@ -60,10 +63,10 @@ export default function HookSection({
 
           {/* Percentile + win rate one-liner */}
           <p className="text-sm leading-relaxed mb-3" style={{ color: 'var(--text-2)' }}>
-            10년 중{" "}
-            <span className="font-bold font-data" style={{ color: info.color }}>하위 {percentile}%</span>
+            과거 10년간 현재보다 낮았던 날:{" "}
+            <span className="font-bold font-data" style={{ color: info.color }}>{percentile}%</span>
             {totalCases > 0 && (
-              <> · 역사적으로 이 구간에서 90일 후 양수 수익률 확률{" "}
+              <> · 유사 구간 {totalCases}건 중 90일 후 양수 수익률{" "}
                 <span className="font-bold font-data" style={{ color: winPct >= 50 ? 'var(--greed)' : 'var(--fear)' }}>
                   {winPct}%
                 </span>
@@ -75,9 +78,6 @@ export default function HookSection({
             {info.interpretation}
           </p>
         </div>
-
-        {/* Score gauge */}
-        <ScoreGauge score={score} regime={regime} change={change} vkospiRaw={vkospiRaw} />
       </div>
     </section>
   );

@@ -7,17 +7,19 @@ import {
   getCurrentSnapshot,
   getHistoricalContext,
   getSimilarCaseReturns,
+  getAllMatchingCaseReturns,
   getConsensusSummary,
   getChartPriceData,
 } from "@/lib/data/dashboardData";
 
 export default async function DashboardPage() {
   const snapshot = await getCurrentSnapshot();
-  const [context, similarCases] = await Promise.all([
+  const [context, displayCases, allMatchingCases] = await Promise.all([
     getHistoricalContext(),
     getSimilarCaseReturns(),
+    getAllMatchingCaseReturns(),
   ]);
-  const consensus = getConsensusSummary(similarCases);
+  const consensus = getConsensusSummary(allMatchingCases);
   const chartData = await getChartPriceData();
 
   const { score, regime, change, date, vkospiRaw, signals } = snapshot;
@@ -40,20 +42,20 @@ export default async function DashboardPage() {
       {/* ━━ 2) CONTEXT — 역사적 위치 ━━ */}
       <PercentileContext
         percentile={context.percentile}
-        totalOccurrences={context.similarEvents.length}
+        totalOccurrences={allMatchingCases.length}
         currentScore={score}
       />
 
-      {/* ━━ 3) STORIES — 유사 사례 카드 ━━ */}
-      {similarCases.length > 0 && (
+      {/* ━━ 3) STORIES — 대표 사례 카드 ━━ */}
+      {displayCases.length > 0 && (
         <section className="flex flex-col gap-4">
           <p
             className="font-mono text-[11px] tracking-[0.08em] uppercase"
             style={{ color: 'var(--text-3)' }}
           >
-            가장 유사한 사례 {similarCases.length}건
+            유사 구간 전체 {allMatchingCases.length}건 중 대표 사례
           </p>
-          {similarCases.map((case_, i) => (
+          {displayCases.map((case_, i) => (
             <StoryCard
               key={case_.date}
               case_={case_}

@@ -10,7 +10,7 @@ import { NARRATIVE_ASSETS } from '../types/narrative';
 import { buildSnapshot } from '../engine/composite';
 import { fetchSignalsWithStatus } from '../api/fetchSignals';
 
-import { findSimilarCases, buildHistoricalContext } from './historicalCases';
+import { findSimilarCases, findAllMatchingCases, buildHistoricalContext } from './historicalCases';
 
 // Chart data functions (async, uses real Yahoo data)
 import {
@@ -88,12 +88,21 @@ export async function getPostSignalPaths(type: 'buy' | 'sell'): Promise<PostSign
 }
 
 /**
- * Similar cases with per-asset forward returns.
+ * Top 3 representative cases for display (StoryCards).
  * Dynamically selected based on current score (±15 points).
  */
 export async function getSimilarCaseReturns(): Promise<SimilarCaseWithReturns[]> {
   const snapshot = await getCurrentSnapshot();
   return findSimilarCases(snapshot.score);
+}
+
+/**
+ * ALL matching cases within ±15 points of current score.
+ * Used for consensus computation across the full pool.
+ */
+export async function getAllMatchingCaseReturns(): Promise<SimilarCaseWithReturns[]> {
+  const snapshot = await getCurrentSnapshot();
+  return findAllMatchingCases(snapshot.score);
 }
 
 /**
