@@ -18,10 +18,9 @@ import {
   mockBuyTiming,
   mockSellTiming,
   mockHeatmapData,
-  mockContext,
 } from '@/data/mockData';
 
-import { mockSimilarCases } from '@/data/mockNarrativeData';
+import { findSimilarCases, buildHistoricalContext } from './historicalCases';
 
 // Chart data functions
 import {
@@ -106,11 +105,12 @@ export function getHeatmap(): HeatmapData {
 }
 
 /**
- * Historical context with curated similar events.
- * Uses static mock events (real historical cases with labels).
+ * Historical context computed dynamically from current score.
+ * Finds similar historical events and computes percentile.
  */
-export function getHistoricalContext(): HistoricalContext {
-  return mockContext;
+export async function getHistoricalContext(): Promise<HistoricalContext> {
+  const snapshot = await getCurrentSnapshot();
+  return buildHistoricalContext(snapshot.score);
 }
 
 /**
@@ -129,11 +129,11 @@ export function getPostSignalPaths(type: 'buy' | 'sell'): PostSignalPathData[] {
 
 /**
  * Similar cases with per-asset forward returns.
- * Prototype: returns hardcoded mock data.
- * Production: will compute from K-FGI history + asset price series.
+ * Dynamically selected based on current score (±15 points).
  */
-export function getSimilarCaseReturns(): SimilarCaseWithReturns[] {
-  return mockSimilarCases;
+export async function getSimilarCaseReturns(): Promise<SimilarCaseWithReturns[]> {
+  const snapshot = await getCurrentSnapshot();
+  return findSimilarCases(snapshot.score);
 }
 
 /**

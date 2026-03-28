@@ -13,8 +13,10 @@ import { getKfgiPriceData } from "@/lib/data/chartData";
 
 export default async function DashboardPage() {
   const snapshot = await getCurrentSnapshot();
-  const context = getHistoricalContext();
-  const similarCases = getSimilarCaseReturns();
+  const [context, similarCases] = await Promise.all([
+    getHistoricalContext(),
+    getSimilarCaseReturns(),
+  ]);
   const consensus = getConsensusSummary(similarCases);
   const chartData = getKfgiPriceData();
 
