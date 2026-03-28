@@ -25,7 +25,7 @@ async function fetchYahooPrices(
 
   const res = await fetch(url, {
     headers: { 'User-Agent': 'Mozilla/5.0' },
-    next: { revalidate: 3600 },
+    next: { revalidate: 300 }, // cache 5 minutes
   });
 
   if (!res.ok) return [];
