@@ -8,8 +8,8 @@ import {
   getHistoricalContext,
   getSimilarCaseReturns,
   getConsensusSummary,
+  getChartPriceData,
 } from "@/lib/data/dashboardData";
-import { getKfgiPriceData } from "@/lib/data/chartData";
 
 export default async function DashboardPage() {
   const snapshot = await getCurrentSnapshot();
@@ -18,7 +18,7 @@ export default async function DashboardPage() {
     getSimilarCaseReturns(),
   ]);
   const consensus = getConsensusSummary(similarCases);
-  const chartData = getKfgiPriceData();
+  const chartData = await getChartPriceData();
 
   const { score, regime, change, date, vkospiRaw, signals } = snapshot;
 

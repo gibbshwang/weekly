@@ -250,6 +250,11 @@ const ALL_CASES: (HistoricalEvent & {
 ];
 
 /**
+ * Export all cases for analysis functions (timing, heatmap, paths).
+ */
+export const ALL_CASES_FOR_ANALYSIS = ALL_CASES;
+
+/**
  * Find similar historical cases within ±15 points of current score.
  * Returns up to 3 closest matches.
  */

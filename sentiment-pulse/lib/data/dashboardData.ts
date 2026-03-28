@@ -2,42 +2,22 @@ import type {
   SignalKey,
   DailyIndexSnapshot,
   HistoryPoint,
-  TimingAnalysis,
-  HeatmapData,
   HistoricalContext,
 } from '../types/kfgi';
 import type { KfgiPriceData, PostSignalPathData } from '../types/charts';
 import type { SimilarCaseWithReturns, ConsensusSummary, CaseReturn } from '../types/narrative';
 import { NARRATIVE_ASSETS } from '../types/narrative';
 import { buildSnapshot } from '../engine/composite';
-import { MOCK_RAW_HISTORY } from '../fixtures/mockRawSignals';
 import { fetchSignalsWithStatus } from '../api/fetchSignals';
-
-// Static mock fallbacks for timing/heatmap (need long history to compute from engine)
-import {
-  mockBuyTiming,
-  mockSellTiming,
-  mockHeatmapData,
-} from '@/data/mockData';
 
 import { findSimilarCases, buildHistoricalContext } from './historicalCases';
 
-// Chart data functions
+// Chart data functions (async, uses real Yahoo data)
 import {
   getKfgiPriceData as _getKfgiPriceData,
   getPostSignalPaths as _getPostSignalPaths,
+  getRollingScores,
 } from './chartData';
-
-// ── Build 30-day history from raw signals via engine ──
-
-function buildHistory(): HistoryPoint[] {
-  let prevScore: number | null = null;
-  return MOCK_RAW_HISTORY.map((entry) => {
-    const snapshot = buildSnapshot(entry.date, entry.signals, prevScore);
-    prevScore = snapshot.score;
-    return { date: snapshot.date, score: snapshot.score, regime: snapshot.regime };
-  });
-}
 
 // ── Cached computations (computed once per server render) ──
 
@@ -46,16 +26,22 @@ let _history: HistoryPoint[] | null = null;
 let _liveSignals: SignalKey[] = [];
 let _mockSignals: SignalKey[] = [];
 
-function getHistoryInternal(): HistoryPoint[] {
+/**
+ * Get 30-day K-FGI history computed from real Yahoo Finance KOSPI data.
+ */
+export async function getHistory(): Promise<HistoryPoint[]> {
   if (!_history) {
-    _history = buildHistory();
+    const allScores = await getRollingScores();
+    // Take the last 30 trading days
+    _history = allScores.slice(-30);
   }
   return _history;
 }
 
 export async function getCurrentSnapshot(): Promise<DailyIndexSnapshot> {
   if (!_snapshot) {
-    const history = getHistoryInternal();
+    // Get previous day's score from real data for change computation
+    const history = await getHistory();
     const prevScore = history.length >= 2 ? history[history.length - 2].score : null;
 
     // Fetch live signals from APIs (with mock fallback per signal)
@@ -76,34 +62,6 @@ export function getSignalSources(): { live: SignalKey[]; mock: SignalKey[] } {
   return { live: _liveSignals, mock: _mockSignals };
 }
 
-export function getHistory(): HistoryPoint[] {
-  return getHistoryInternal();
-}
-
-/**
- * Buy timing analysis.
- * Falls back to static mock data until we have multi-year K-FGI history.
- */
-export function getBuyTiming(): TimingAnalysis {
-  return mockBuyTiming;
-}
-
-/**
- * Sell timing analysis.
- * Falls back to static mock data until we have multi-year K-FGI history.
- */
-export function getSellTiming(): TimingAnalysis {
-  return mockSellTiming;
-}
-
-/**
- * Cross-asset heatmap.
- * Falls back to static mock data until we have multi-year K-FGI history.
- */
-export function getHeatmap(): HeatmapData {
-  return mockHeatmapData;
-}
-
 /**
  * Historical context computed dynamically from current score.
  * Finds similar historical events and computes percentile.
@@ -115,15 +73,17 @@ export async function getHistoricalContext(): Promise<HistoricalContext> {
 
 /**
  * Precomputed K-FGI vs asset price data for Chart A.
+ * Fetches real data from Yahoo Finance.
  */
-export function getChartPriceData(): KfgiPriceData {
+export async function getChartPriceData(): Promise<KfgiPriceData> {
   return _getKfgiPriceData();
 }
 
 /**
  * Post-signal price paths for Chart B mini charts.
+ * Computed from historical cases data.
  */
-export function getPostSignalPaths(type: 'buy' | 'sell'): PostSignalPathData[] {
+export async function getPostSignalPaths(type: 'buy' | 'sell'): Promise<PostSignalPathData[]> {
   return _getPostSignalPaths(type);
 }
 
