@@ -48,10 +48,9 @@
 
 ## Data architecture
 
-### Historical cases (`lib/data/historicalCases.ts`)
-- `ALL_CASES`: 12건의 실제 한국 시장 이벤트 (2014–2024)
-- `findAllMatchingCases(score)`: 현재 점수 ±15점 범위의 **전체** 매칭 케이스 반환
-- `findSimilarCases(score)`: `findAllMatchingCases().slice(0, 3)` — 표시용 상위 3건
+### Historical context (`lib/data/historicalCases.ts`)
+- `computePercentile(score, allScores)`: 3년치 실제 rolling scores에서 백분위 계산
+- `buildHistoricalContext(score)`: percentile + similarEvents (async, Yahoo 데이터 기반)
 
 ### Consensus vs Display 분리
 - **표시용 (display)**: `getSimilarCaseReturns()` → 3건 (StoryCard에 표시)
@@ -60,7 +59,7 @@
 - VerdictSection과 HookSection의 winRate는 **전체 매칭 케이스** 기준
 
 ### Rolling scores (`lib/data/chartData.ts`)
-- KOSPI 2년 데이터로 rolling K-FGI 점수 계산
+- KOSPI 3년 데이터로 rolling K-FGI 점수 계산
 - momentum(125DMA), volatility(20일 실현변동성), strength(52주 고점 대비) 사용
 - `getKfgiPriceData()`: 자산별 × 기간별 K-FGI vs 가격 차트 데이터
 

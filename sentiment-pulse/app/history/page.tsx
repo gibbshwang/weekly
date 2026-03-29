@@ -45,7 +45,7 @@ export default async function HistoryPage() {
       <div className="bg-gray-900 rounded-xl p-4 md:p-6 border border-gray-800">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-base font-bold text-white">유사 구간 사례</h2>
-          <span className="text-xs text-gray-500">현재 점수 기준 ±15점</span>
+          <span className="text-xs text-gray-500">현재 점수 기준 ±10점</span>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">

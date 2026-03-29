@@ -38,7 +38,7 @@ export default function PercentileContext({ percentile, totalOccurrences, curren
 
       {/* Context text */}
       <p className="text-sm leading-relaxed" style={{ color: 'var(--text-2)' }}>
-        과거 10년간 현재보다 낮았던 날이{" "}
+        과거 3년간 현재보다 낮았던 날이{" "}
         <span className="font-bold font-data" style={{ color: 'var(--fear)' }}>
           {percentile}%
         </span>

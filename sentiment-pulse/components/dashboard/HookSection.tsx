@@ -63,7 +63,7 @@ export default function HookSection({
 
           {/* Percentile + win rate one-liner */}
           <p className="text-sm leading-relaxed mb-3" style={{ color: 'var(--text-2)' }}>
-            과거 10년간 현재보다 낮았던 날:{" "}
+            과거 3년간 현재보다 낮았던 날:{" "}
             <span className="font-bold font-data" style={{ color: info.color }}>{percentile}%</span>
             {totalCases > 0 && (
               <> · 유사 구간 {totalCases}개 케이스 중 90일 후 양수 수익률{" "}
