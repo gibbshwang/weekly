@@ -10,7 +10,8 @@ import { NARRATIVE_ASSETS } from '../types/narrative';
 import { buildSnapshot } from '../engine/composite';
 import { fetchSignalsWithStatus } from '../api/fetchSignals';
 
-import { findSimilarCases, buildHistoricalContext } from './historicalCases';
+import { buildHistoricalContext } from './historicalCases';
+import { generateCaseLabels } from '../ai/generateCaseLabels';
 
 // Chart data functions (async, uses real Yahoo data)
 import {
@@ -94,11 +95,52 @@ export async function getPostSignalPaths(type: 'buy' | 'sell'): Promise<PostSign
 
 /**
  * Top 3 representative cases for display (StoryCards).
- * Dynamically selected based on current score (±15 points).
+ * Auto-computed data + AI-generated labels.
+ *
+ * 1. 현재 점수 ±10점 범위에서 가장 유사한 거래일 3개 선택
+ * 2. AI가 각 날짜의 시장 이벤트 label/note 생성
+ * 3. KOSPI 수익률로 pricePath 보간 생성
  */
 export async function getSimilarCaseReturns(): Promise<SimilarCaseWithReturns[]> {
   const snapshot = await getCurrentSnapshot();
-  return findSimilarCases(snapshot.score);
+  const allCases = await getAutoComputedReturns();
+  const range = 10;
+
+  const top3 = allCases
+    .filter(c => Math.abs(c.score - snapshot.score) <= range)
+    .sort((a, b) => Math.abs(a.score - snapshot.score) - Math.abs(b.score - snapshot.score))
+    .slice(0, 3);
+
+  if (top3.length === 0) return [];
+
+  // AI label 생성 (API key 없으면 fallback)
+  const labels = await generateCaseLabels(
+    top3.map(c => ({ date: c.date, score: c.score }))
+  );
+
+  return top3.map((c, i) => {
+    const kospi = c.returns.find(r => r.asset === 'KOSPI');
+    const r30 = kospi?.return30d ?? 0;
+    const r60 = kospi?.return60d ?? 0;
+    const r90 = kospi?.return90d ?? 0;
+
+    return {
+      date: c.date,
+      label: labels[i]?.label,
+      score: c.score,
+      note: labels[i]?.note ?? `K-FGI ${c.score}점`,
+      returns: c.returns,
+      pricePath: [
+        { day: 0, avgReturn: 0 },
+        { day: 15, avgReturn: Math.round(r30 / 2 * 10) / 10 },
+        { day: 30, avgReturn: r30 },
+        { day: 45, avgReturn: Math.round((r30 + r60) / 2 * 10) / 10 },
+        { day: 60, avgReturn: r60 },
+        { day: 75, avgReturn: Math.round((r60 + r90) / 2 * 10) / 10 },
+        { day: 90, avgReturn: r90 },
+      ],
+    };
+  });
 }
 
 /**
