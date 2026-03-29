@@ -18,6 +18,10 @@ export default function RootLayout({
       <head>
         <link
           rel="stylesheet"
+          href="https://api.fontshare.com/v2/css?f[]=satoshi@1,2&display=swap"
+        />
+        <link
+          rel="stylesheet"
           href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css"
         />
         <link
