@@ -66,7 +66,7 @@ export default function HookSection({
             과거 10년간 현재보다 낮았던 날:{" "}
             <span className="font-bold font-data" style={{ color: info.color }}>{percentile}%</span>
             {totalCases > 0 && (
-              <> · 유사 구간 {totalCases}건 중 90일 후 양수 수익률{" "}
+              <> · 유사 구간 {totalCases}거래일 중 90일 후 양수 수익률{" "}
                 <span className="font-bold font-data" style={{ color: winPct >= 50 ? 'var(--greed)' : 'var(--fear)' }}>
                   {winPct}%
                 </span>

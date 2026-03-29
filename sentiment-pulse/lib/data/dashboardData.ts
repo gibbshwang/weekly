@@ -10,14 +10,19 @@ import { NARRATIVE_ASSETS } from '../types/narrative';
 import { buildSnapshot } from '../engine/composite';
 import { fetchSignalsWithStatus } from '../api/fetchSignals';
 
-import { findSimilarCases, findAllMatchingCases, buildHistoricalContext } from './historicalCases';
+import { findSimilarCases, buildHistoricalContext } from './historicalCases';
 
 // Chart data functions (async, uses real Yahoo data)
 import {
   getKfgiPriceData as _getKfgiPriceData,
   getPostSignalPaths as _getPostSignalPaths,
+  getAutoComputedReturns,
   getRollingScores,
 } from './chartData';
+import type { AutoComputedCase } from './chartData';
+
+// ── Cached rolling score stats ──
+let _rollingOccurrences: number | null = null;
 
 // ── Cached computations (computed once per server render) ──
 
@@ -97,19 +102,45 @@ export async function getSimilarCaseReturns(): Promise<SimilarCaseWithReturns[]>
 }
 
 /**
- * ALL matching cases within ±15 points of current score.
+ * ALL trading days within ±10 points of current score,
+ * with auto-computed forward returns from real Yahoo Finance price data.
  * Used for consensus computation across the full pool.
+ *
+ * 2년치 데이터에서 자동 계산하므로 수백 건의 실제 거래일 데이터를 기반으로 통계를 산출합니다.
  */
-export async function getAllMatchingCaseReturns(): Promise<SimilarCaseWithReturns[]> {
+export async function getAllMatchingCaseReturns(): Promise<AutoComputedCase[]> {
   const snapshot = await getCurrentSnapshot();
-  return findAllMatchingCases(snapshot.score);
+  const allCases = await getAutoComputedReturns();
+  const range = 10;
+  return allCases
+    .filter(c => Math.abs(c.score - snapshot.score) <= range)
+    .sort((a, b) => Math.abs(a.score - snapshot.score) - Math.abs(b.score - snapshot.score));
 }
 
 /**
- * Consensus summary across similar cases.
- * Computes win rate, average returns, and headline from case data.
+ * Count how many trading days in the rolling K-FGI history
+ * fall within ±15 points of the current score.
+ * This uses real KOSPI-derived scores, not the 12 hand-picked events.
  */
-export function getConsensusSummary(cases: SimilarCaseWithReturns[]): ConsensusSummary {
+export async function getRollingOccurrences(): Promise<number> {
+  if (_rollingOccurrences !== null) return _rollingOccurrences;
+  const snapshot = await getCurrentSnapshot();
+  const allScores = await getRollingScores();
+  const range = 10;
+  _rollingOccurrences = allScores.filter(
+    pt => Math.abs(pt.score - snapshot.score) <= range
+  ).length;
+  return _rollingOccurrences;
+}
+
+/**
+ * Consensus summary across auto-computed cases.
+ * Computes win rate, average returns, and headline from real price data.
+ *
+ * cases: AutoComputedCase[] — 자동 계산된 forward return 데이터
+ * 90d return이 null인 거래일(최근 90일 이내)은 승률 계산에서 제외됩니다.
+ */
+export function getConsensusSummary(cases: AutoComputedCase[]): ConsensusSummary {
   if (cases.length === 0) {
     return {
       winRate90d: 0,
@@ -120,19 +151,21 @@ export function getConsensusSummary(cases: SimilarCaseWithReturns[]): ConsensusS
         return90d: null,
       })),
       totalCases: 0,
-      headline: "유사 사례가 충분하지 않습니다",
+      headline: "유사 구간 데이터가 충분하지 않습니다",
     };
   }
 
-  // Count KOSPI 90-day positive cases for win rate
+  // Count KOSPI 90-day positive cases for win rate (only where 90d data exists)
   let winCount = 0;
+  let totalWith90d = 0;
   for (const c of cases) {
     const kospi = c.returns.find(r => r.asset === 'KOSPI');
-    if (kospi && kospi.return90d !== null && kospi.return90d > 0) {
-      winCount++;
+    if (kospi && kospi.return90d !== null) {
+      totalWith90d++;
+      if (kospi.return90d > 0) winCount++;
     }
   }
-  const winRate90d = winCount / cases.length;
+  const winRate90d = totalWith90d > 0 ? winCount / totalWith90d : 0;
 
   // Compute per-asset average returns
   const avgReturns: CaseReturn[] = NARRATIVE_ASSETS.map(asset => {
@@ -157,7 +190,9 @@ export function getConsensusSummary(cases: SimilarCaseWithReturns[]): ConsensusS
     };
   });
 
-  const headline = `${cases.length}건 중 ${winCount}건에서 90일 후 KOSPI 양수 수익률`;
+  const headline = totalWith90d > 0
+    ? `유사 구간 ${cases.length}거래일 중 ${winCount}건에서 90일 후 KOSPI 양수 수익률 (${Math.round(winRate90d * 100)}%)`
+    : `유사 구간 ${cases.length}거래일 (90일 후 데이터 대기 중)`;
 
   return {
     winRate90d,

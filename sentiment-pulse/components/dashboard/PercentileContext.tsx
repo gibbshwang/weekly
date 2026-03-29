@@ -44,9 +44,9 @@ export default function PercentileContext({ percentile, totalOccurrences, curren
         </span>
         입니다.
         {totalOccurrences > 0 && (
-          <> 2014년 이후 유사 구간(±15점) 진입은 총{" "}
-            <span className="font-bold font-data" style={{ color: 'var(--text-1)' }}>{totalOccurrences}건</span>
-            {" "}확인됩니다.
+          <> 최근 2년간 유사 구간(±10점)에 해당했던 거래일은{" "}
+            <span className="font-bold font-data" style={{ color: 'var(--text-1)' }}>{totalOccurrences}일</span>
+            입니다.
           </>
         )}
       </p>

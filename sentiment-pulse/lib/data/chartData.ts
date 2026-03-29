@@ -7,6 +7,8 @@ import type {
   PostSignalPathData,
   PostSignalPathPoint,
 } from '../types/charts';
+import type { CaseReturn, NarrativeAsset } from '../types/narrative';
+import { NARRATIVE_ASSETS } from '../types/narrative';
 import { normalizeSignal } from '../engine/normalize';
 import { classifyRegime } from '../config/regime';
 
@@ -121,11 +123,37 @@ function computeRollingScores(kospiPrices: PricePoint[]): HistoryPoint[] {
   return scores;
 }
 
+// ── Shared raw price cache ──
+
+interface RawAssetPrices {
+  KOSPI: PricePoint[];
+  KOSDAQ: PricePoint[];
+  BTC: PricePoint[];
+  Gold: PricePoint[];
+}
+
+let _cachedRawPrices: RawAssetPrices | null = null;
+let _cachedRollingScores: HistoryPoint[] | null = null;
+
+async function getRawAssetPrices(): Promise<RawAssetPrices> {
+  if (_cachedRawPrices) return _cachedRawPrices;
+  const [KOSPI, KOSDAQ, BTC, Gold] = await Promise.all([
+    fetchYahooPrices('^KS11', '2y'),
+    fetchYahooPrices('^KQ11', '2y'),
+    fetchYahooPrices('BTC-USD', '2y'),
+    fetchYahooPrices('GC=F', '2y'),
+  ]);
+  _cachedRawPrices = { KOSPI, KOSDAQ, BTC, Gold };
+  return _cachedRawPrices;
+}
+
 // ── Exported rolling scores (used by dashboardData for history) ──
 
 export async function getRollingScores(): Promise<HistoryPoint[]> {
-  const kospiPrices = await fetchYahooPrices('^KS11', '2y');
-  return computeRollingScores(kospiPrices);
+  if (_cachedRollingScores) return _cachedRollingScores;
+  const rawPrices = await getRawAssetPrices();
+  _cachedRollingScores = computeRollingScores(rawPrices.KOSPI);
+  return _cachedRollingScores;
 }
 
 // ── Yahoo symbol mapping ──
@@ -199,24 +227,8 @@ let _cachedData: KfgiPriceData | null = null;
 export async function getKfgiPriceData(): Promise<KfgiPriceData> {
   if (_cachedData) return _cachedData;
 
-  // Fetch KOSPI 2y for score computation + all asset prices in parallel
-  const [kospiPrices, kosdaqPrices, btcPrices, goldPrices] = await Promise.all([
-    fetchYahooPrices('^KS11', '2y'),
-    fetchYahooPrices('^KQ11', '2y'),
-    fetchYahooPrices('BTC-USD', '2y'),
-    fetchYahooPrices('GC=F', '2y'),
-  ]);
-
-  // Compute rolling K-FGI scores from KOSPI data
-  const scores = computeRollingScores(kospiPrices);
-
-  // Build price data for each asset × range combination
-  const assetPricesMap: Record<ChartAsset, PricePoint[]> = {
-    KOSPI: kospiPrices,
-    KOSDAQ: kosdaqPrices,
-    BTC: btcPrices,
-    Gold: goldPrices,
-  };
+  const rawPrices = await getRawAssetPrices();
+  const scores = await getRollingScores();
 
   const data = {} as KfgiPriceData;
   const ranges: TimeRange[] = ['1M', '3M', '6M', '1Y'];
@@ -225,7 +237,7 @@ export async function getKfgiPriceData(): Promise<KfgiPriceData> {
   for (const asset of assets) {
     data[asset] = {} as Record<TimeRange, KfgiPricePoint[]>;
     for (const range of ranges) {
-      data[asset][range] = buildKfgiPriceSeries(scores, assetPricesMap[asset], range);
+      data[asset][range] = buildKfgiPriceSeries(scores, rawPrices[asset], range);
     }
   }
 
@@ -233,18 +245,106 @@ export async function getKfgiPriceData(): Promise<KfgiPriceData> {
   return data;
 }
 
-// ── Post-signal paths (computed from historical cases) ──
+// ── Auto-computed forward returns for every trading day ──
+
+export interface AutoComputedCase {
+  date: string;
+  score: number;
+  returns: CaseReturn[];
+}
+
+/**
+ * Find the closing price on or shortly after a target date.
+ * Searches up to 5 calendar days forward to find the nearest trading day.
+ */
+function findForwardPrice(
+  priceMap: Map<string, number>,
+  baseDate: string,
+  daysForward: number,
+): number | null {
+  const base = new Date(baseDate);
+  for (let offset = 0; offset <= 5; offset++) {
+    const target = new Date(base);
+    target.setDate(target.getDate() + daysForward + offset);
+    const dateStr = target.toISOString().slice(0, 10);
+    const price = priceMap.get(dateStr);
+    if (price !== undefined) return price;
+  }
+  return null;
+}
+
+/**
+ * Compute forward returns (30d/60d/90d) for every trading day
+ * that has a K-FGI score, using real Yahoo Finance price data.
+ *
+ * Yahoo Finance 2년 데이터를 사용하므로 매일 자동으로 새 거래일이 포함됩니다.
+ * 최근 90일 이내의 거래일은 90d return이 null (아직 미래 데이터 없음).
+ */
+let _cachedAutoReturns: AutoComputedCase[] | null = null;
+
+export async function getAutoComputedReturns(): Promise<AutoComputedCase[]> {
+  if (_cachedAutoReturns) return _cachedAutoReturns;
+
+  const [scores, rawPrices] = await Promise.all([
+    getRollingScores(),
+    getRawAssetPrices(),
+  ]);
+
+  // Build date→price maps for each asset
+  const priceMaps: Record<NarrativeAsset, Map<string, number>> = {
+    KOSPI: new Map(),
+    KOSDAQ: new Map(),
+    Gold: new Map(),
+    BTC: new Map(),
+  };
+  for (const asset of NARRATIVE_ASSETS) {
+    for (const pt of rawPrices[asset]) {
+      priceMaps[asset].set(pt.date, pt.close);
+    }
+  }
+
+  const cases: AutoComputedCase[] = [];
+
+  for (const pt of scores) {
+    const returns: CaseReturn[] = [];
+
+    for (const asset of NARRATIVE_ASSETS) {
+      const basePrice = priceMaps[asset].get(pt.date);
+      if (!basePrice) {
+        returns.push({ asset, return30d: null, return60d: null, return90d: null });
+        continue;
+      }
+
+      const p30 = findForwardPrice(priceMaps[asset], pt.date, 30);
+      const p60 = findForwardPrice(priceMaps[asset], pt.date, 60);
+      const p90 = findForwardPrice(priceMaps[asset], pt.date, 90);
+
+      returns.push({
+        asset,
+        return30d: p30 !== null ? Math.round(((p30 / basePrice) - 1) * 1000) / 10 : null,
+        return60d: p60 !== null ? Math.round(((p60 / basePrice) - 1) * 1000) / 10 : null,
+        return90d: p90 !== null ? Math.round(((p90 / basePrice) - 1) * 1000) / 10 : null,
+      });
+    }
+
+    cases.push({ date: pt.date, score: pt.score, returns });
+  }
+
+  _cachedAutoReturns = cases;
+  return cases;
+}
+
+// ── Post-signal paths (now using auto-computed data) ──
 
 export async function getPostSignalPaths(
   type: 'buy' | 'sell',
 ): Promise<PostSignalPathData[]> {
-  // Import historical cases dynamically to avoid circular deps
-  const { ALL_CASES_FOR_ANALYSIS } = await import('./historicalCases');
+  const allCases = await getAutoComputedReturns();
 
   const threshold = type === 'buy' ? 40 : 60;
   const cases = type === 'buy'
-    ? ALL_CASES_FOR_ANALYSIS.filter(c => c.score <= threshold)
-    : ALL_CASES_FOR_ANALYSIS.filter(c => c.score >= threshold);
+    ? allCases.filter(c => c.score <= threshold)
+    : allCases.filter(c => c.score >= threshold);
 
   if (cases.length === 0) return [];
 

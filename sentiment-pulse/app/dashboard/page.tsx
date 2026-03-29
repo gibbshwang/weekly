@@ -8,16 +8,18 @@ import {
   getHistoricalContext,
   getSimilarCaseReturns,
   getAllMatchingCaseReturns,
+  getRollingOccurrences,
   getConsensusSummary,
   getChartPriceData,
 } from "@/lib/data/dashboardData";
 
 export default async function DashboardPage() {
   const snapshot = await getCurrentSnapshot();
-  const [context, displayCases, allMatchingCases] = await Promise.all([
+  const [context, displayCases, allMatchingCases, rollingOccurrences] = await Promise.all([
     getHistoricalContext(),
     getSimilarCaseReturns(),
     getAllMatchingCaseReturns(),
+    getRollingOccurrences(),
   ]);
   const consensus = getConsensusSummary(allMatchingCases);
   const chartData = await getChartPriceData();
@@ -42,7 +44,7 @@ export default async function DashboardPage() {
       {/* ━━ 2) CONTEXT — 역사적 위치 ━━ */}
       <PercentileContext
         percentile={context.percentile}
-        totalOccurrences={allMatchingCases.length}
+        totalOccurrences={rollingOccurrences}
         currentScore={score}
       />
 
@@ -53,7 +55,7 @@ export default async function DashboardPage() {
             className="font-mono text-[11px] tracking-[0.08em] uppercase"
             style={{ color: 'var(--text-3)' }}
           >
-            유사 구간 전체 {allMatchingCases.length}건 중 대표 사례
+            과거 유사 구간(±10점) 주요 이벤트 대표 사례
           </p>
           {displayCases.map((case_, i) => (
             <StoryCard
