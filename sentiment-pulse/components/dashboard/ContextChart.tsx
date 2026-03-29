@@ -140,7 +140,7 @@ export default function ContextChart({ data }: ContextChartProps) {
       {/* Chart */}
       <div className="h-64 min-w-0 overflow-hidden">
         {mounted && series.length > 0 ? (
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" minWidth={0}>
             <LineChart data={series} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#1e1e26" />
               <XAxis

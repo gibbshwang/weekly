@@ -113,7 +113,7 @@ export default function SparklineChart({ history }: SparklineChartProps) {
 
       <div className="h-56 min-w-0 overflow-hidden">
         {mounted ? (
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" minWidth={0}>
             <LineChart data={history} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#1e1e26" />
               <XAxis

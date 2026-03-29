@@ -82,7 +82,7 @@ export default function HistoryChart({ data }: { data: HistoryPoint[] }) {
   return (
     <div className="h-72 min-w-0 overflow-hidden">
       {mounted ? (
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height="100%" minWidth={0}>
           <LineChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
             <XAxis

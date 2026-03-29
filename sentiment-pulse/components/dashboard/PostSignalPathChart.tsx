@@ -74,7 +74,7 @@ export default function PostSignalPathChart({
       </p>
       <div className="h-28 min-w-0">
         {mounted ? (
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" minWidth={0}>
             <LineChart
               data={data.points}
               margin={{ top: 5, right: 10, left: -15, bottom: 0 }}
