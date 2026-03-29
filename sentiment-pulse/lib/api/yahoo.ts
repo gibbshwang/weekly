@@ -1,3 +1,5 @@
+import { YAHOO_SYMBOLS, SIGNAL_DATA_RANGES } from '../config/constants';
+
 interface YahooChartResult {
   timestamp: number[];
   indicators: {
@@ -67,7 +69,7 @@ async function fetchYahooPrices(
  * Raw range: [-8, 8]
  */
 export async function fetchMomentum(): Promise<number | null> {
-  const prices = await fetchYahooPrices('^KS11', '1y');
+  const prices = await fetchYahooPrices(YAHOO_SYMBOLS.KOSPI, SIGNAL_DATA_RANGES.momentum);
   if (prices.length < 126) return null;
 
   const current = prices[prices.length - 1].close;
@@ -83,8 +85,8 @@ export async function fetchMomentum(): Promise<number | null> {
  */
 export async function fetchSafeHaven(): Promise<number | null> {
   const [kospi, bond] = await Promise.all([
-    fetchYahooPrices('^KS11', '3mo'),
-    fetchYahooPrices('148070.KS', '3mo'), // KODEX 국고채3년
+    fetchYahooPrices(YAHOO_SYMBOLS.KOSPI, SIGNAL_DATA_RANGES.safeHaven),
+    fetchYahooPrices(YAHOO_SYMBOLS.GovtBond, SIGNAL_DATA_RANGES.safeHaven),
   ]);
 
   if (kospi.length < 21 || bond.length < 21) return null;
@@ -103,7 +105,7 @@ export async function fetchSafeHaven(): Promise<number | null> {
  * Raw range: [12, 35] (matches VKOSPI normalization range)
  */
 export async function fetchVolatilityProxy(): Promise<number | null> {
-  const prices = await fetchYahooPrices('^KS11', '3mo');
+  const prices = await fetchYahooPrices(YAHOO_SYMBOLS.KOSPI, SIGNAL_DATA_RANGES.volatility);
   if (prices.length < 22) return null;
 
   const recent = prices.slice(-21);
@@ -127,7 +129,7 @@ export async function fetchVolatilityProxy(): Promise<number | null> {
  * Near 52-week high → high strength (0.9). Far below → low strength (0.1).
  */
 export async function fetchStrengthProxy(): Promise<number | null> {
-  const prices = await fetchYahooPrices('^KS11', '1y');
+  const prices = await fetchYahooPrices(YAHOO_SYMBOLS.KOSPI, SIGNAL_DATA_RANGES.strength);
   if (prices.length < 20) return null;
 
   const current = prices[prices.length - 1].close;
@@ -151,8 +153,8 @@ export async function fetchStrengthProxy(): Promise<number | null> {
  */
 export async function fetchBreadthProxy(): Promise<number | null> {
   const [kospi, kosdaq] = await Promise.all([
-    fetchYahooPrices('^KS11', '3mo'),
-    fetchYahooPrices('^KQ11', '3mo'), // KOSDAQ Composite
+    fetchYahooPrices(YAHOO_SYMBOLS.KOSPI, SIGNAL_DATA_RANGES.breadth),
+    fetchYahooPrices(YAHOO_SYMBOLS.KOSDAQ, SIGNAL_DATA_RANGES.breadth),
   ]);
 
   if (kospi.length < 21 || kosdaq.length < 21) return null;
@@ -179,8 +181,8 @@ export async function fetchBreadthProxy(): Promise<number | null> {
  */
 export async function fetchPutCallProxy(): Promise<number | null> {
   const [regular, inverse] = await Promise.all([
-    fetchYahooPrices('069500.KS', '3mo'), // KODEX 200
-    fetchYahooPrices('114800.KS', '3mo'), // KODEX 인버스
+    fetchYahooPrices(YAHOO_SYMBOLS.KODEX200, SIGNAL_DATA_RANGES.putCall),
+    fetchYahooPrices(YAHOO_SYMBOLS.KODEXInverse, SIGNAL_DATA_RANGES.putCall),
   ]);
 
   if (regular.length < 5 || inverse.length < 5) return null;
@@ -213,8 +215,8 @@ export async function fetchPutCallProxy(): Promise<number | null> {
  */
 export async function fetchCreditProxy(): Promise<number | null> {
   const [corp, govt] = await Promise.all([
-    fetchYahooPrices('411060.KS', '6mo'), // KODEX 종합채권(AA-이상)
-    fetchYahooPrices('148070.KS', '6mo'), // KODEX 국고채3년
+    fetchYahooPrices(YAHOO_SYMBOLS.CorpBond, SIGNAL_DATA_RANGES.credit),
+    fetchYahooPrices(YAHOO_SYMBOLS.GovtBond, SIGNAL_DATA_RANGES.credit),
   ]);
 
   if (corp.length < 60 || govt.length < 60) return null;

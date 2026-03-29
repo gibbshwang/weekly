@@ -9,6 +9,11 @@ import type { SimilarCaseWithReturns, ConsensusSummary, CaseReturn } from '../ty
 import { NARRATIVE_ASSETS } from '../types/narrative';
 import { buildSnapshot } from '../engine/composite';
 import { fetchSignalsWithStatus } from '../api/fetchSignals';
+import {
+  SCORE_SIMILARITY_RANGE,
+  SIMILAR_CASES_DISPLAY_COUNT,
+  HISTORY_LOOKBACK_DAYS,
+} from '../config/constants';
 
 import { buildHistoricalContext } from './historicalCases';
 import { generateCaseLabels } from '../ai/generateCaseLabels';
@@ -38,8 +43,8 @@ let _mockSignals: SignalKey[] = [];
 export async function getHistory(): Promise<HistoryPoint[]> {
   if (!_history) {
     const allScores = await getRollingScores();
-    // Take the last 30 trading days
-    _history = allScores.slice(-30);
+    // Take the last N trading days
+    _history = allScores.slice(-HISTORY_LOOKBACK_DAYS);
   }
   return _history;
 }
@@ -104,12 +109,11 @@ export async function getPostSignalPaths(type: 'buy' | 'sell'): Promise<PostSign
 export async function getSimilarCaseReturns(): Promise<SimilarCaseWithReturns[]> {
   const snapshot = await getCurrentSnapshot();
   const allCases = await getAutoComputedReturns();
-  const range = 10;
 
   const top3 = allCases
-    .filter(c => Math.abs(c.score - snapshot.score) <= range)
+    .filter(c => Math.abs(c.score - snapshot.score) <= SCORE_SIMILARITY_RANGE)
     .sort((a, b) => Math.abs(a.score - snapshot.score) - Math.abs(b.score - snapshot.score))
-    .slice(0, 3);
+    .slice(0, SIMILAR_CASES_DISPLAY_COUNT);
 
   if (top3.length === 0) return [];
 
@@ -153,24 +157,22 @@ export async function getSimilarCaseReturns(): Promise<SimilarCaseWithReturns[]>
 export async function getAllMatchingCaseReturns(): Promise<AutoComputedCase[]> {
   const snapshot = await getCurrentSnapshot();
   const allCases = await getAutoComputedReturns();
-  const range = 10;
   return allCases
-    .filter(c => Math.abs(c.score - snapshot.score) <= range)
+    .filter(c => Math.abs(c.score - snapshot.score) <= SCORE_SIMILARITY_RANGE)
     .sort((a, b) => Math.abs(a.score - snapshot.score) - Math.abs(b.score - snapshot.score));
 }
 
 /**
  * Count how many trading days in the rolling K-FGI history
- * fall within ±15 points of the current score.
+ * fall within ±SCORE_SIMILARITY_RANGE points of the current score.
  * This uses real KOSPI-derived scores, not the 12 hand-picked events.
  */
 export async function getRollingOccurrences(): Promise<number> {
   if (_rollingOccurrences !== null) return _rollingOccurrences;
   const snapshot = await getCurrentSnapshot();
   const allScores = await getRollingScores();
-  const range = 10;
   _rollingOccurrences = allScores.filter(
-    pt => Math.abs(pt.score - snapshot.score) <= range
+    pt => Math.abs(pt.score - snapshot.score) <= SCORE_SIMILARITY_RANGE
   ).length;
   return _rollingOccurrences;
 }

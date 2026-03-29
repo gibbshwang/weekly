@@ -1,7 +1,8 @@
 import type { RegimeType } from './kfgi';
+import type { NarrativeAsset } from './narrative';
 
-/** Asset options for Chart A selector */
-export type ChartAsset = 'KOSPI' | 'KOSDAQ' | 'BTC' | 'Gold';
+/** Asset options for Chart A selector — derived from NarrativeAsset (single source of truth) */
+export type ChartAsset = NarrativeAsset;
 
 /** Time range options for Chart A selector */
 export type TimeRange = '1M' | '3M' | '6M' | '1Y';

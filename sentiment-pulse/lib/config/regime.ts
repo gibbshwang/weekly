@@ -17,9 +17,8 @@ export const REGIME_THRESHOLDS: RegimeThreshold[] = [
 ];
 
 export function classifyRegime(score: number): RegimeType {
-  if (score <= 24) return 'extreme_fear';
-  if (score <= 44) return 'fear';
-  if (score <= 55) return 'neutral';
-  if (score <= 74) return 'greed';
+  for (const t of REGIME_THRESHOLDS) {
+    if (score >= t.min && score <= t.max) return t.regime;
+  }
   return 'extreme_greed';
 }

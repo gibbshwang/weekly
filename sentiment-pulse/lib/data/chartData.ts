@@ -11,6 +11,13 @@ import type { CaseReturn, NarrativeAsset } from '../types/narrative';
 import { NARRATIVE_ASSETS } from '../types/narrative';
 import { normalizeSignal } from '../engine/normalize';
 import { classifyRegime } from '../config/regime';
+import {
+  BUY_THRESHOLD,
+  SELL_THRESHOLD,
+  FORWARD_PRICE_SEARCH_DAYS,
+  YAHOO_SYMBOLS,
+  RANGE_TRADING_DAYS as RANGE_DAYS_CONFIG,
+} from '../config/constants';
 
 // ── Yahoo Finance price fetcher (server-side) ──
 
@@ -243,14 +250,14 @@ let _cachedRollingScores: HistoryPoint[] | null = null;
 async function getRawAssetPrices(): Promise<RawAssetPrices> {
   if (_cachedRawPrices) return _cachedRawPrices;
   const [KOSPI, KOSDAQ, BTC, Gold, KODEX200, KODEXInverse, GovtBond, CorpBond] = await Promise.all([
-    fetchYahooPrices('^KS11', '3y'),
-    fetchYahooPrices('^KQ11', '3y'),
-    fetchYahooPrices('BTC-USD', '3y'),
-    fetchYahooPrices('GC=F', '3y'),
-    fetchYahooPrices('069500.KS', '3y'),  // KODEX 200
-    fetchYahooPrices('114800.KS', '3y'),  // KODEX 인버스
-    fetchYahooPrices('148070.KS', '3y'),  // KODEX 국고채3년
-    fetchYahooPrices('411060.KS', '3y'),  // KODEX 종합채권(AA-이상)
+    fetchYahooPrices(YAHOO_SYMBOLS.KOSPI, '3y'),
+    fetchYahooPrices(YAHOO_SYMBOLS.KOSDAQ, '3y'),
+    fetchYahooPrices(YAHOO_SYMBOLS.BTC, '3y'),
+    fetchYahooPrices(YAHOO_SYMBOLS.Gold, '3y'),
+    fetchYahooPrices(YAHOO_SYMBOLS.KODEX200, '3y'),
+    fetchYahooPrices(YAHOO_SYMBOLS.KODEXInverse, '3y'),
+    fetchYahooPrices(YAHOO_SYMBOLS.GovtBond, '3y'),
+    fetchYahooPrices(YAHOO_SYMBOLS.CorpBond, '3y'),
   ]);
   _cachedRawPrices = { KOSPI, KOSDAQ, BTC, Gold, KODEX200, KODEXInverse, GovtBond, CorpBond };
   return _cachedRawPrices;
@@ -272,21 +279,16 @@ export async function getRollingScores(): Promise<HistoryPoint[]> {
   return _cachedRollingScores;
 }
 
-// ── Yahoo symbol mapping ──
+// ── Yahoo symbol mapping (from central config) ──
 
 const ASSET_SYMBOLS: Record<ChartAsset, string> = {
-  KOSPI: '^KS11',
-  KOSDAQ: '^KQ11',
-  BTC: 'BTC-USD',
-  Gold: 'GC=F',
+  KOSPI: YAHOO_SYMBOLS.KOSPI,
+  KOSDAQ: YAHOO_SYMBOLS.KOSDAQ,
+  BTC: YAHOO_SYMBOLS.BTC,
+  Gold: YAHOO_SYMBOLS.Gold,
 };
 
-const RANGE_TRADING_DAYS: Record<TimeRange, number> = {
-  '1M': 21,
-  '3M': 63,
-  '6M': 126,
-  '1Y': 250,
-};
+const RANGE_TRADING_DAYS: Record<TimeRange, number> = RANGE_DAYS_CONFIG;
 
 // ── Build K-FGI vs Price chart data ──
 
@@ -379,7 +381,7 @@ function findForwardPrice(
   daysForward: number,
 ): number | null {
   const base = new Date(baseDate);
-  for (let offset = 0; offset <= 5; offset++) {
+  for (let offset = 0; offset <= FORWARD_PRICE_SEARCH_DAYS; offset++) {
     const target = new Date(base);
     target.setDate(target.getDate() + daysForward + offset);
     const dateStr = target.toISOString().slice(0, 10);
@@ -457,7 +459,7 @@ export async function getPostSignalPaths(
 ): Promise<PostSignalPathData[]> {
   const allCases = await getAutoComputedReturns();
 
-  const threshold = type === 'buy' ? 40 : 60;
+  const threshold = type === 'buy' ? BUY_THRESHOLD : SELL_THRESHOLD;
   const cases = type === 'buy'
     ? allCases.filter(c => c.score <= threshold)
     : allCases.filter(c => c.score >= threshold);
