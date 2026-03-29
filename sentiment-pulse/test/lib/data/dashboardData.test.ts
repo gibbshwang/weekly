@@ -55,7 +55,7 @@ describe('getConsensusSummary', () => {
     expect(result.winRate90d).toBe(1);
   });
 
-  it('excludes null KOSPI 90d from win rate denominator', () => {
+  it('excludes null KOSPI 90d from win rate denominator and totalCases', () => {
     const cases: AutoComputedCase[] = [
       makeCase({ kospi90d: null }),   // excluded from win rate calc
       makeCase({ kospi90d: 10.0 }),   // positive
@@ -65,7 +65,7 @@ describe('getConsensusSummary', () => {
 
     // Only 1 case has 90d data, and it's positive → 100%
     expect(result.winRate90d).toBe(1);
-    expect(result.totalCases).toBe(2);
+    expect(result.totalCases).toBe(1); // only cases with 90d data
   });
 
   it('computes average returns across cases', () => {

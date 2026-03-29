@@ -191,13 +191,13 @@ export function getConsensusSummary(cases: AutoComputedCase[]): ConsensusSummary
   });
 
   const headline = totalWith90d > 0
-    ? `유사 구간 ${cases.length}거래일 중 ${winCount}건에서 90일 후 KOSPI 양수 수익률 (${Math.round(winRate90d * 100)}%)`
-    : `유사 구간 ${cases.length}거래일 (90일 후 데이터 대기 중)`;
+    ? `유사 구간 ${totalWith90d}거래일 중 ${winCount}건에서 90일 후 KOSPI 양수 수익률 (${Math.round(winRate90d * 100)}%)`
+    : `유사 구간 데이터 대기 중`;
 
   return {
     winRate90d,
     avgReturns,
-    totalCases: cases.length,
+    totalCases: totalWith90d,
     headline,
   };
 }
