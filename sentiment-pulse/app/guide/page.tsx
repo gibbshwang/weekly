@@ -3,25 +3,19 @@
 import { useState } from "react";
 import { Regime, interpretations } from "@/data/interpretations";
 import { assetImplications, assetLabels, AssetClass } from "@/data/assetImplications";
+import { REGIME_THRESHOLDS } from "@/lib/config/regime";
 import Link from "next/link";
 
-const regimes: { id: Regime; shortLabel: string }[] = [
-  { id: "extreme_fear", shortLabel: "극단적 공포" },
-  { id: "fear", shortLabel: "공포" },
-  { id: "neutral", shortLabel: "중립" },
-  { id: "greed", shortLabel: "탐욕" },
-  { id: "extreme_greed", shortLabel: "극단적 탐욕" },
-];
+const regimes: { id: Regime; shortLabel: string }[] = REGIME_THRESHOLDS.map((t) => ({
+  id: t.regime as Regime,
+  shortLabel: t.label,
+}));
 
 const assets: AssetClass[] = ["kr_equity", "global_equity", "crypto", "commodities"];
 
-const regimeRanges: Record<Regime, string> = {
-  extreme_fear: "0–20",
-  fear: "21–40",
-  neutral: "41–60",
-  greed: "61–80",
-  extreme_greed: "81–100",
-};
+const regimeRanges: Record<Regime, string> = Object.fromEntries(
+  REGIME_THRESHOLDS.map((t) => [t.regime, `${t.min}–${t.max}`])
+) as Record<Regime, string>;
 
 export default function GuidePage() {
   const [selected, setSelected] = useState<Regime>("fear");
