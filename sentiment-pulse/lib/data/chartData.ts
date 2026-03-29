@@ -17,6 +17,7 @@ import { classifyRegime } from '../config/regime';
 interface PricePoint {
   date: string;
   close: number;
+  volume?: number;
 }
 
 async function fetchYahooPrices(
@@ -46,33 +47,62 @@ async function fetchYahooPrices(
     points.push({
       date: d.toISOString().slice(0, 10),
       close,
+      volume: quotes.volume?.[i] ?? undefined,
     });
   }
 
   return points;
 }
 
-// ── Compute rolling K-FGI scores from KOSPI data ──
+// ── Compute rolling K-FGI scores from all market data ──
 
-function computeRollingScores(kospiPrices: PricePoint[]): HistoryPoint[] {
+interface AllPriceSeries {
+  kospi: PricePoint[];
+  kosdaq: PricePoint[];
+  kodex200: PricePoint[];
+  kodexInverse: PricePoint[];
+  govtBond: PricePoint[];
+  corpBond: PricePoint[];
+}
+
+/**
+ * Build a date→index map for quick lookups in a price series.
+ */
+function buildDateIndex(prices: PricePoint[]): Map<string, number> {
+  const map = new Map<string, number>();
+  for (let i = 0; i < prices.length; i++) {
+    map.set(prices[i].date, i);
+  }
+  return map;
+}
+
+function computeRollingScores(allPrices: AllPriceSeries): HistoryPoint[] {
+  const { kospi, kosdaq, kodex200, kodexInverse, govtBond, corpBond } = allPrices;
   const scores: HistoryPoint[] = [];
 
-  for (let i = 0; i < kospiPrices.length; i++) {
-    const current = kospiPrices[i].close;
-    const date = kospiPrices[i].date;
+  // Build date→index maps for secondary series
+  const kosdaqIdx = buildDateIndex(kosdaq);
+  const kodex200Idx = buildDateIndex(kodex200);
+  const kodexInvIdx = buildDateIndex(kodexInverse);
+  const govtBondIdx = buildDateIndex(govtBond);
+  const corpBondIdx = buildDateIndex(corpBond);
 
-    // momentum: current / 125DMA - 1 * 100
+  for (let i = 0; i < kospi.length; i++) {
+    const current = kospi[i].close;
+    const date = kospi[i].date;
+
+    // 1. momentum: current / 125DMA - 1 * 100
     let momentumRaw: number | null = null;
     if (i >= 125) {
-      const slice = kospiPrices.slice(i - 125, i);
+      const slice = kospi.slice(i - 125, i);
       const sma125 = slice.reduce((s, p) => s + p.close, 0) / 125;
       momentumRaw = ((current / sma125) - 1) * 100;
     }
 
-    // volatility: 20-day annualized realized vol
+    // 2. volatility: 20-day annualized realized vol
     let volRaw: number | null = null;
     if (i >= 21) {
-      const recent = kospiPrices.slice(i - 20, i + 1);
+      const recent = kospi.slice(i - 20, i + 1);
       const returns: number[] = [];
       for (let j = 1; j < recent.length; j++) {
         returns.push(Math.log(recent[j].close / recent[j - 1].close));
@@ -82,21 +112,72 @@ function computeRollingScores(kospiPrices: PricePoint[]): HistoryPoint[] {
       volRaw = Math.sqrt(variance) * Math.sqrt(252) * 100;
     }
 
-    // strength: distance from 52-week high (need ~250 days)
+    // 3. strength: distance from 52-week high
     let strengthRaw: number | null = null;
     if (i >= 20) {
       const lookback = Math.min(i, 250);
-      const windowPrices = kospiPrices.slice(i - lookback, i + 1);
+      const windowPrices = kospi.slice(i - lookback, i + 1);
       const high52w = Math.max(...windowPrices.map(p => p.close));
       const ratio = current / high52w;
       strengthRaw = 0.1 + (ratio - 0.7) / (1.0 - 0.7) * (0.9 - 0.1);
       strengthRaw = Math.max(0.1, Math.min(0.9, strengthRaw));
     }
 
+    // 4. breadth: KOSDAQ vs KOSPI 20-day relative performance
+    let breadthRaw: number | null = null;
+    const kosdaqI = kosdaqIdx.get(date);
+    if (kosdaqI !== undefined && kosdaqI >= 20 && i >= 20) {
+      const kospiRet = (kospi[i].close / kospi[i - 20].close - 1) * 100;
+      const kosdaqRet = (kosdaq[kosdaqI].close / kosdaq[kosdaqI - 20].close - 1) * 100;
+      const relPerf = kosdaqRet - kospiRet;
+      breadthRaw = 0.5 + (relPerf / 5) * 0.2;
+      breadthRaw = Math.max(0.3, Math.min(0.7, breadthRaw));
+    }
+
+    // 5. putCall: KODEX Inverse volume / KODEX 200 volume (5-day avg)
+    let putCallRaw: number | null = null;
+    const k200I = kodex200Idx.get(date);
+    const kInvI = kodexInvIdx.get(date);
+    if (k200I !== undefined && kInvI !== undefined && k200I >= 4 && kInvI >= 4) {
+      const avgVol = (prices: PricePoint[], endIdx: number, n: number) => {
+        const slice = prices.slice(Math.max(0, endIdx - n + 1), endIdx + 1);
+        const vols = slice.map(p => p.volume ?? 0).filter(v => v > 0);
+        return vols.length > 0 ? vols.reduce((a, b) => a + b, 0) / vols.length : 0;
+      };
+      const regVol = avgVol(kodex200, k200I, 5);
+      const invVol = avgVol(kodexInverse, kInvI, 5);
+      if (regVol > 0) {
+        const ratio = invVol / regVol;
+        putCallRaw = 0.6 + (ratio - 0.05) / (0.50 - 0.05) * (1.4 - 0.6);
+        putCallRaw = Math.max(0.6, Math.min(1.4, putCallRaw));
+      }
+    }
+
+    // 6. safeHaven: KOSPI 20d return - Bond ETF 20d return
+    let safeHavenRaw: number | null = null;
+    const govtI = govtBondIdx.get(date);
+    if (govtI !== undefined && govtI >= 20 && i >= 20) {
+      const kospiRet = (kospi[i].close / kospi[i - 20].close - 1) * 100;
+      const bondRet = (govtBond[govtI].close / govtBond[govtI - 20].close - 1) * 100;
+      safeHavenRaw = kospiRet - bondRet;
+    }
+
+    // 7. credit: govt bond 60d return - corp bond 60d return
+    let creditRaw: number | null = null;
+    const govtI2 = govtBondIdx.get(date);
+    const corpI = corpBondIdx.get(date);
+    if (govtI2 !== undefined && corpI !== undefined && govtI2 >= 60 && corpI >= 60) {
+      const govtRet = (govtBond[govtI2].close / govtBond[govtI2 - 60].close - 1) * 100;
+      const corpRet = (corpBond[corpI].close / corpBond[corpI - 60].close - 1) * 100;
+      const diff = govtRet - corpRet;
+      creditRaw = 40 + (diff - (-0.5)) / (1.5 - (-0.5)) * (150 - 40);
+      creditRaw = Math.max(40, Math.min(150, creditRaw));
+    }
+
     // Need at least momentum to compute a meaningful score
     if (momentumRaw === null) continue;
 
-    // Normalize available signals
+    // Normalize all available signals
     const signalScores: number[] = [];
 
     const momNorm = normalizeSignal('momentum', momentumRaw);
@@ -110,6 +191,26 @@ function computeRollingScores(kospiPrices: PricePoint[]): HistoryPoint[] {
     if (strengthRaw !== null) {
       const strNorm = normalizeSignal('strength', strengthRaw);
       if (Number.isFinite(strNorm)) signalScores.push(strNorm);
+    }
+
+    if (breadthRaw !== null) {
+      const breadthNorm = normalizeSignal('breadth', breadthRaw);
+      if (Number.isFinite(breadthNorm)) signalScores.push(breadthNorm);
+    }
+
+    if (putCallRaw !== null) {
+      const putCallNorm = normalizeSignal('putCall', putCallRaw);
+      if (Number.isFinite(putCallNorm)) signalScores.push(putCallNorm);
+    }
+
+    if (safeHavenRaw !== null) {
+      const safeHavenNorm = normalizeSignal('safeHaven', safeHavenRaw);
+      if (Number.isFinite(safeHavenNorm)) signalScores.push(safeHavenNorm);
+    }
+
+    if (creditRaw !== null) {
+      const creditNorm = normalizeSignal('credit', creditRaw);
+      if (Number.isFinite(creditNorm)) signalScores.push(creditNorm);
     }
 
     if (signalScores.length === 0) continue;
@@ -130,6 +231,10 @@ interface RawAssetPrices {
   KOSDAQ: PricePoint[];
   BTC: PricePoint[];
   Gold: PricePoint[];
+  KODEX200: PricePoint[];
+  KODEXInverse: PricePoint[];
+  GovtBond: PricePoint[];
+  CorpBond: PricePoint[];
 }
 
 let _cachedRawPrices: RawAssetPrices | null = null;
@@ -137,13 +242,17 @@ let _cachedRollingScores: HistoryPoint[] | null = null;
 
 async function getRawAssetPrices(): Promise<RawAssetPrices> {
   if (_cachedRawPrices) return _cachedRawPrices;
-  const [KOSPI, KOSDAQ, BTC, Gold] = await Promise.all([
+  const [KOSPI, KOSDAQ, BTC, Gold, KODEX200, KODEXInverse, GovtBond, CorpBond] = await Promise.all([
     fetchYahooPrices('^KS11', '3y'),
     fetchYahooPrices('^KQ11', '3y'),
     fetchYahooPrices('BTC-USD', '3y'),
     fetchYahooPrices('GC=F', '3y'),
+    fetchYahooPrices('069500.KS', '3y'),  // KODEX 200
+    fetchYahooPrices('114800.KS', '3y'),  // KODEX 인버스
+    fetchYahooPrices('148070.KS', '3y'),  // KODEX 국고채3년
+    fetchYahooPrices('411060.KS', '3y'),  // KODEX 종합채권(AA-이상)
   ]);
-  _cachedRawPrices = { KOSPI, KOSDAQ, BTC, Gold };
+  _cachedRawPrices = { KOSPI, KOSDAQ, BTC, Gold, KODEX200, KODEXInverse, GovtBond, CorpBond };
   return _cachedRawPrices;
 }
 
@@ -152,7 +261,14 @@ async function getRawAssetPrices(): Promise<RawAssetPrices> {
 export async function getRollingScores(): Promise<HistoryPoint[]> {
   if (_cachedRollingScores) return _cachedRollingScores;
   const rawPrices = await getRawAssetPrices();
-  _cachedRollingScores = computeRollingScores(rawPrices.KOSPI);
+  _cachedRollingScores = computeRollingScores({
+    kospi: rawPrices.KOSPI,
+    kosdaq: rawPrices.KOSDAQ,
+    kodex200: rawPrices.KODEX200,
+    kodexInverse: rawPrices.KODEXInverse,
+    govtBond: rawPrices.GovtBond,
+    corpBond: rawPrices.CorpBond,
+  });
   return _cachedRollingScores;
 }
 
