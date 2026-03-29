@@ -1,5 +1,7 @@
 import type { HistoricalContext, HistoryPoint } from '../types/kfgi';
 import { getRollingScores } from './chartData';
+import { findSimilarCases } from '../analysis/similarCases';
+import { REGIME_LABELS } from '../constants/regime';
 
 /**
  * Compute historical percentile from real rolling K-FGI scores.
@@ -14,13 +16,19 @@ export function computePercentile(score: number, allScores: HistoryPoint[]): num
 /**
  * Build historical context dynamically from real Yahoo Finance data.
  * percentile은 3년치 rolling scores에서 실제 계산.
+ * similarEvents는 현재 점수와 가장 유사한 과거 사례.
  */
 export async function buildHistoricalContext(currentScore: number): Promise<HistoricalContext> {
   const allScores = await getRollingScores();
   const percentile = computePercentile(currentScore, allScores);
+  const similarEvents = findSimilarCases(currentScore, allScores).map((e) => ({
+    ...e,
+    label: e.regime ? REGIME_LABELS[e.regime] : '',
+    note: `K-FGI ${e.score}점`,
+  }));
 
   return {
     percentile,
-    similarEvents: [], // StoryCards에서 별도로 표시하므로 여기서는 빈 배열
+    similarEvents,
   };
 }
