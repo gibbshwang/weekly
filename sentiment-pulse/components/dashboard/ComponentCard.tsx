@@ -12,10 +12,10 @@ const SCORE_COLOR: Record<string, string> = {
 };
 
 function getScoreColor(score: number): string {
-  if (score <= 20) return SCORE_COLOR.extreme_fear;
-  if (score <= 40) return SCORE_COLOR.fear;
-  if (score <= 60) return SCORE_COLOR.neutral;
-  if (score <= 80) return SCORE_COLOR.greed;
+  if (score <= 24) return SCORE_COLOR.extreme_fear;
+  if (score <= 44) return SCORE_COLOR.fear;
+  if (score <= 55) return SCORE_COLOR.neutral;
+  if (score <= 74) return SCORE_COLOR.greed;
   return SCORE_COLOR.extreme_greed;
 }
 

@@ -12,10 +12,10 @@ const REGIME_COLORS: Record<string, string> = {
 };
 
 function getScoreColor(score: number): string {
-  if (score <= 20) return REGIME_COLORS.extreme_fear;
-  if (score <= 40) return REGIME_COLORS.fear;
-  if (score <= 60) return REGIME_COLORS.neutral;
-  if (score <= 80) return REGIME_COLORS.greed;
+  if (score <= 24) return REGIME_COLORS.extreme_fear;
+  if (score <= 44) return REGIME_COLORS.fear;
+  if (score <= 55) return REGIME_COLORS.neutral;
+  if (score <= 74) return REGIME_COLORS.greed;
   return REGIME_COLORS.extreme_greed;
 }
 

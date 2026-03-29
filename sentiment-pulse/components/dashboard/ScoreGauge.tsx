@@ -18,10 +18,10 @@ const REGIME_COLORS: Record<string, string> = {
 };
 
 function getScoreColor(score: number): string {
-  if (score <= 20) return REGIME_COLORS.extreme_fear;
-  if (score <= 40) return REGIME_COLORS.fear;
-  if (score <= 60) return REGIME_COLORS.neutral;
-  if (score <= 80) return REGIME_COLORS.greed;
+  if (score <= 24) return REGIME_COLORS.extreme_fear;
+  if (score <= 44) return REGIME_COLORS.fear;
+  if (score <= 55) return REGIME_COLORS.neutral;
+  if (score <= 74) return REGIME_COLORS.greed;
   return REGIME_COLORS.extreme_greed;
 }
 
@@ -53,11 +53,11 @@ export default function ScoreGauge({ score, regime, change, vkospiRaw }: ScoreGa
   const needleY = cy + needleLen * Math.sin(toRad(needleAngle));
 
   const zones = [
-    { from: 0, to: 20, color: REGIME_COLORS.extreme_fear },
-    { from: 20, to: 40, color: REGIME_COLORS.fear },
-    { from: 40, to: 60, color: REGIME_COLORS.neutral },
-    { from: 60, to: 80, color: REGIME_COLORS.greed },
-    { from: 80, to: 100, color: REGIME_COLORS.extreme_greed },
+    { from: 0, to: 25, color: REGIME_COLORS.extreme_fear },
+    { from: 25, to: 45, color: REGIME_COLORS.fear },
+    { from: 45, to: 56, color: REGIME_COLORS.neutral },
+    { from: 56, to: 75, color: REGIME_COLORS.greed },
+    { from: 75, to: 100, color: REGIME_COLORS.extreme_greed },
   ];
 
   const zoneArcPath = (fromScore: number, toScore: number, radius: number) => {

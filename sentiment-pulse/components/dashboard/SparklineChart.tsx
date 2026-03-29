@@ -26,10 +26,10 @@ const REGIME_COLORS: Record<string, string> = {
 };
 
 function getScoreColor(score: number): string {
-  if (score <= 20) return REGIME_COLORS.extreme_fear;
-  if (score <= 40) return REGIME_COLORS.fear;
-  if (score <= 60) return REGIME_COLORS.neutral;
-  if (score <= 80) return REGIME_COLORS.greed;
+  if (score <= 24) return REGIME_COLORS.extreme_fear;
+  if (score <= 44) return REGIME_COLORS.fear;
+  if (score <= 55) return REGIME_COLORS.neutral;
+  if (score <= 74) return REGIME_COLORS.greed;
   return REGIME_COLORS.extreme_greed;
 }
 
@@ -131,10 +131,10 @@ export default function SparklineChart({ history }: SparklineChartProps) {
                 axisLine={false}
               />
               <Tooltip content={<CustomTooltip />} />
-              <ReferenceLine y={20} stroke="#dc2626" strokeDasharray="3 3" strokeOpacity={0.5} />
-              <ReferenceLine y={40} stroke="#ef4444" strokeDasharray="3 3" strokeOpacity={0.5} />
-              <ReferenceLine y={60} stroke="#6b7280" strokeDasharray="3 3" strokeOpacity={0.5} />
-              <ReferenceLine y={80} stroke="#22c55e" strokeDasharray="3 3" strokeOpacity={0.5} />
+              <ReferenceLine y={25} stroke="#dc2626" strokeDasharray="3 3" strokeOpacity={0.5} />
+              <ReferenceLine y={45} stroke="#ef4444" strokeDasharray="3 3" strokeOpacity={0.5} />
+              <ReferenceLine y={56} stroke="#6b7280" strokeDasharray="3 3" strokeOpacity={0.5} />
+              <ReferenceLine y={75} stroke="#22c55e" strokeDasharray="3 3" strokeOpacity={0.5} />
               <Line
                 type="monotone"
                 dataKey="score"
@@ -152,10 +152,10 @@ export default function SparklineChart({ history }: SparklineChartProps) {
 
       <div className="flex justify-between text-xs font-data px-1">
         <span style={{ color: '#dc2626' }}>0 극단적공포</span>
-        <span style={{ color: '#ef4444' }}>20 공포</span>
-        <span style={{ color: '#6b7280' }}>40 중립</span>
-        <span style={{ color: '#22c55e' }}>60 탐욕</span>
-        <span style={{ color: '#d97706' }}>80 극단적탐욕</span>
+        <span style={{ color: '#ef4444' }}>25 공포</span>
+        <span style={{ color: '#6b7280' }}>45 중립</span>
+        <span style={{ color: '#22c55e' }}>56 탐욕</span>
+        <span style={{ color: '#d97706' }}>75 극단적탐욕</span>
       </div>
     </div>
   );
