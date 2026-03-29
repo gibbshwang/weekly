@@ -106,7 +106,7 @@ export async function getSimilarCaseReturns(): Promise<SimilarCaseWithReturns[]>
  * with auto-computed forward returns from real Yahoo Finance price data.
  * Used for consensus computation across the full pool.
  *
- * 2년치 데이터에서 자동 계산하므로 수백 건의 실제 거래일 데이터를 기반으로 통계를 산출합니다.
+ * 3년치 데이터에서 자동 계산하므로 수백 건의 실제 거래일 데이터를 기반으로 통계를 산출합니다.
  */
 export async function getAllMatchingCaseReturns(): Promise<AutoComputedCase[]> {
   const snapshot = await getCurrentSnapshot();

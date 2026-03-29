@@ -21,7 +21,7 @@ interface PricePoint {
 
 async function fetchYahooPrices(
   symbol: string,
-  range: string = '2y',
+  range: string = '3y',
 ): Promise<PricePoint[]> {
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=${range}&interval=1d`;
 
@@ -138,10 +138,10 @@ let _cachedRollingScores: HistoryPoint[] | null = null;
 async function getRawAssetPrices(): Promise<RawAssetPrices> {
   if (_cachedRawPrices) return _cachedRawPrices;
   const [KOSPI, KOSDAQ, BTC, Gold] = await Promise.all([
-    fetchYahooPrices('^KS11', '2y'),
-    fetchYahooPrices('^KQ11', '2y'),
-    fetchYahooPrices('BTC-USD', '2y'),
-    fetchYahooPrices('GC=F', '2y'),
+    fetchYahooPrices('^KS11', '3y'),
+    fetchYahooPrices('^KQ11', '3y'),
+    fetchYahooPrices('BTC-USD', '3y'),
+    fetchYahooPrices('GC=F', '3y'),
   ]);
   _cachedRawPrices = { KOSPI, KOSDAQ, BTC, Gold };
   return _cachedRawPrices;
@@ -277,7 +277,7 @@ function findForwardPrice(
  * Compute forward returns (30d/60d/90d) for every trading day
  * that has a K-FGI score, using real Yahoo Finance price data.
  *
- * Yahoo Finance 2년 데이터를 사용하므로 매일 자동으로 새 거래일이 포함됩니다.
+ * Yahoo Finance 3년 데이터를 사용하므로 매일 자동으로 새 거래일이 포함됩니다.
  * 최근 90일 이내의 거래일은 90d return이 null (아직 미래 데이터 없음).
  */
 let _cachedAutoReturns: AutoComputedCase[] | null = null;
