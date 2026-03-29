@@ -181,46 +181,32 @@ function computeRollingScores(allPrices: AllPriceSeries): HistoryPoint[] {
       creditRaw = Math.max(40, Math.min(150, creditRaw));
     }
 
-    // Need at least momentum to compute a meaningful score
-    if (momentumRaw === null) continue;
+    // Require all 7 signals to be available for a fair comparison
+    // with the current snapshot (which always uses all 7 signals).
+    // Days with fewer signals produce systematically different scores,
+    // biasing the percentile calculation.
+    if (
+      momentumRaw === null ||
+      volRaw === null ||
+      strengthRaw === null ||
+      breadthRaw === null ||
+      putCallRaw === null ||
+      safeHavenRaw === null ||
+      creditRaw === null
+    ) continue;
 
-    // Normalize all available signals
-    const signalScores: number[] = [];
+    // Normalize all 7 signals
+    const signalScores: number[] = [
+      normalizeSignal('momentum', momentumRaw),
+      normalizeSignal('volatility', volRaw),
+      normalizeSignal('strength', strengthRaw),
+      normalizeSignal('breadth', breadthRaw),
+      normalizeSignal('putCall', putCallRaw),
+      normalizeSignal('safeHaven', safeHavenRaw),
+      normalizeSignal('credit', creditRaw),
+    ].filter(Number.isFinite);
 
-    const momNorm = normalizeSignal('momentum', momentumRaw);
-    if (Number.isFinite(momNorm)) signalScores.push(momNorm);
-
-    if (volRaw !== null) {
-      const volNorm = normalizeSignal('volatility', volRaw);
-      if (Number.isFinite(volNorm)) signalScores.push(volNorm);
-    }
-
-    if (strengthRaw !== null) {
-      const strNorm = normalizeSignal('strength', strengthRaw);
-      if (Number.isFinite(strNorm)) signalScores.push(strNorm);
-    }
-
-    if (breadthRaw !== null) {
-      const breadthNorm = normalizeSignal('breadth', breadthRaw);
-      if (Number.isFinite(breadthNorm)) signalScores.push(breadthNorm);
-    }
-
-    if (putCallRaw !== null) {
-      const putCallNorm = normalizeSignal('putCall', putCallRaw);
-      if (Number.isFinite(putCallNorm)) signalScores.push(putCallNorm);
-    }
-
-    if (safeHavenRaw !== null) {
-      const safeHavenNorm = normalizeSignal('safeHaven', safeHavenRaw);
-      if (Number.isFinite(safeHavenNorm)) signalScores.push(safeHavenNorm);
-    }
-
-    if (creditRaw !== null) {
-      const creditNorm = normalizeSignal('credit', creditRaw);
-      if (Number.isFinite(creditNorm)) signalScores.push(creditNorm);
-    }
-
-    if (signalScores.length === 0) continue;
+    if (signalScores.length < 7) continue;
 
     const score = Math.round(signalScores.reduce((a, b) => a + b, 0) / signalScores.length);
     const regime = classifyRegime(score);
