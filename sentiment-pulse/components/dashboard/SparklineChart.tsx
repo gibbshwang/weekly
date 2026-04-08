@@ -1,6 +1,5 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import {
   LineChart,
   Line,
@@ -14,6 +13,7 @@ import {
 import type { HistoryPoint } from "@/lib/types/kfgi";
 import { getScoreColor, REGIME_COLORS } from "@/lib/constants/regime";
 import { REGIME_THRESHOLDS } from "@/lib/config/regime";
+import { useContainerReady } from "@/lib/hooks/useContainerReady";
 
 interface SparklineChartProps {
   history: HistoryPoint[];
@@ -68,11 +68,7 @@ function formatXDate(dateStr: string) {
 }
 
 export default function SparklineChart({ history }: SparklineChartProps) {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => {
-    const id = requestAnimationFrame(() => setMounted(true));
-    return () => cancelAnimationFrame(id);
-  }, []);
+  const [containerRef, ready] = useContainerReady();
 
   return (
     <div
@@ -100,8 +96,8 @@ export default function SparklineChart({ history }: SparklineChartProps) {
         ))}
       </div>
 
-      <div className="h-56 min-w-0 overflow-hidden">
-        {mounted ? (
+      <div ref={containerRef} className="h-56 min-w-0 overflow-hidden">
+        {ready ? (
           <ResponsiveContainer width="100%" height="100%" minWidth={0}>
             <LineChart data={history} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#1e1e26" />

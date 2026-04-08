@@ -1,6 +1,5 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import {
   LineChart,
   Line,
@@ -11,6 +10,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import type { PostSignalPathData } from "@/lib/types/charts";
+import { useContainerReady } from "@/lib/hooks/useContainerReady";
 
 interface PostSignalPathChartProps {
   data: PostSignalPathData;
@@ -60,11 +60,7 @@ export default function PostSignalPathChart({
   type,
   color,
 }: PostSignalPathChartProps) {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => {
-    const id = requestAnimationFrame(() => setMounted(true));
-    return () => cancelAnimationFrame(id);
-  }, []);
+  const [containerRef, ready] = useContainerReady();
 
   const lineColor = color ?? (type ? LINE_COLORS[type] : "#6b7280");
 
@@ -73,8 +69,8 @@ export default function PostSignalPathChart({
       <p className="text-xs" style={{ color: 'var(--text-3)' }}>
         {data.asset} 평균 가격 경로
       </p>
-      <div className="h-28 min-w-0">
-        {mounted ? (
+      <div ref={containerRef} className="h-28 min-w-0">
+        {ready ? (
           <ResponsiveContainer width="100%" height="100%" minWidth={0}>
             <LineChart
               data={data.points}

@@ -1,6 +1,5 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import {
   LineChart,
   Line,
@@ -14,6 +13,7 @@ import {
 import type { HistoryPoint } from "@/lib/types/kfgi";
 import { getScoreColor, REGIME_LABELS } from "@/lib/constants/regime";
 import { REGIME_THRESHOLDS } from "@/lib/config/regime";
+import { useContainerReady } from "@/lib/hooks/useContainerReady";
 
 function formatXDate(dateStr: string) {
   const d = new Date(dateStr);
@@ -58,15 +58,11 @@ function CustomTooltip({ active, payload }: CustomTooltipProps) {
 }
 
 export default function HistoryChart({ data }: { data: HistoryPoint[] }) {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => {
-    const id = requestAnimationFrame(() => setMounted(true));
-    return () => cancelAnimationFrame(id);
-  }, []);
+  const [containerRef, ready] = useContainerReady();
 
   return (
-    <div className="h-72 min-w-0 overflow-hidden">
-      {mounted ? (
+    <div ref={containerRef} className="h-72 min-w-0 overflow-hidden">
+      {ready ? (
         <ResponsiveContainer width="100%" height="100%" minWidth={0}>
           <LineChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   LineChart,
   Line,
@@ -16,6 +16,7 @@ import type {
   KfgiPricePoint,
   KfgiPriceData,
 } from "@/lib/types/charts";
+import { useContainerReady } from "@/lib/hooks/useContainerReady";
 
 const ASSETS: { key: ChartAsset; label: string }[] = [
   { key: "KOSPI", label: "KOSPI" },
@@ -71,14 +72,9 @@ function formatXDate(dateStr: string) {
 }
 
 export default function ContextChart({ data }: ContextChartProps) {
-  const [mounted, setMounted] = useState(false);
+  const [containerRef, ready] = useContainerReady();
   const [asset, setAsset] = useState<ChartAsset>("KOSPI");
   const [range, setRange] = useState<TimeRange>("3M");
-
-  useEffect(() => {
-    const id = requestAnimationFrame(() => setMounted(true));
-    return () => cancelAnimationFrame(id);
-  }, []);
 
   const series: KfgiPricePoint[] = data[asset]?.[range] ?? [];
 
@@ -139,8 +135,8 @@ export default function ContextChart({ data }: ContextChartProps) {
       </div>
 
       {/* Chart */}
-      <div className="h-64 min-w-0 overflow-hidden">
-        {mounted && series.length > 0 ? (
+      <div ref={containerRef} className="h-64 min-w-0 overflow-hidden">
+        {ready && series.length > 0 ? (
           <ResponsiveContainer width="100%" height="100%" minWidth={0}>
             <LineChart data={series} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#1e1e26" />
@@ -192,7 +188,7 @@ export default function ContextChart({ data }: ContextChartProps) {
               />
             </LineChart>
           </ResponsiveContainer>
-        ) : !mounted ? (
+        ) : !ready ? (
           <div className="w-full h-full rounded animate-pulse" style={{ background: 'var(--border)' }} />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-sm" style={{ color: 'var(--text-3)' }}>
