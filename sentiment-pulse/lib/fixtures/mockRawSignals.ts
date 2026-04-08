@@ -1,10 +1,10 @@
 import type { SignalKey } from '../types/kfgi';
 
 /**
- * Mock raw signal values for 2026-03-24.
+ * Mock raw signal values (fallback when Yahoo Finance API fails).
  *
  * Calibrated so that after normalization they approximate
- * the existing mockData scores:
+ * moderate fear scores:
  *   momentum≈28, volatility≈35, safeHaven≈22, credit≈38,
  *   strength≈30, putCall≈42, breadth≈25
  */
@@ -34,7 +34,9 @@ function generateMockHistory() {
   }> = [];
 
   // Base values oscillate around "neutral" and drift toward current fear reading
-  const baseDate = new Date('2026-02-23');
+  const today = new Date();
+  const baseDate = new Date(today);
+  baseDate.setDate(today.getDate() - 29);
 
   for (let i = 0; i < 30; i++) {
     const d = new Date(baseDate);
@@ -61,7 +63,7 @@ function generateMockHistory() {
   }
 
   // Force last entry to match today's values
-  history[29] = { date: '2026-03-24', signals: { ...MOCK_RAW_TODAY } };
+  history[29] = { date: today.toISOString().slice(0, 10), signals: { ...MOCK_RAW_TODAY } };
 
   return history;
 }

@@ -44,8 +44,8 @@ const faqs = [
     a: "연간 플랜은 월간 플랜 대비 약 33% 할인된 가격입니다. (₩39,000/년 = ₩3,250/월 상당)",
   },
   {
-    q: "K-FGI는 투자 권유 서비스인가요?",
-    a: "아닙니다. K-FGI는 시장 심리 정보를 제공하는 정보 서비스입니다. 투자 결정은 본인의 판단과 책임 하에 이루어져야 합니다.",
+    q: "Korea Fear & Greed Index는 투자 권유 서비스인가요?",
+    a: "아닙니다. Korea Fear & Greed Index는 시장 심리 정보를 제공하는 정보 서비스입니다. 투자 결정은 본인의 판단과 책임 하에 이루어져야 합니다.",
   },
   {
     q: "결제 수단은 무엇을 지원하나요?",
@@ -65,7 +65,7 @@ export default function SubscribePage() {
   return (
     <div className="max-w-5xl mx-auto px-4 py-6 flex flex-col gap-8">
       <div className="text-center">
-        <h1 className="text-3xl font-black text-white">K-FGI PRO</h1>
+        <h1 className="text-3xl font-black text-white">Korea F&G PRO</h1>
         <p className="text-gray-400 mt-2">시장 심리를 더 깊이, 더 정확하게</p>
       </div>
 
@@ -200,7 +200,7 @@ export default function SubscribePage() {
       {/* Disclaimer */}
       <div className="p-4 bg-gray-800/30 rounded-xl border border-gray-800">
         <p className="text-xs text-gray-600 leading-relaxed text-center">
-          K-FGI PRO는 투자 자문 서비스가 아닙니다. 모든 정보는 교육 및 정보 제공 목적이며,
+          Korea F&G PRO는 투자 자문 서비스가 아닙니다. 모든 정보는 교육 및 정보 제공 목적이며,
           투자 결정에 대한 책임은 전적으로 사용자 본인에게 있습니다.
         </p>
       </div>

@@ -1,4 +1,5 @@
 import type { HistoryPoint, RegimeType } from '../types/kfgi';
+import { EVENT_COOLDOWN_DAYS } from '../config/constants';
 
 export interface ExtractedEvent {
   date: string;
@@ -20,7 +21,7 @@ export function extractThresholdEvents(
   history: HistoryPoint[],
   threshold: number,
   direction: 'below' | 'above',
-  cooldownDays: number = 5,
+  cooldownDays: number = EVENT_COOLDOWN_DAYS,
 ): ExtractedEvent[] {
   const events: ExtractedEvent[] = [];
   let lastEventIdx = -cooldownDays - 1;

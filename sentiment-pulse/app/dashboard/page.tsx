@@ -1,113 +1,95 @@
-import ScoreGauge from "@/components/dashboard/ScoreGauge";
-import InterpretationCard from "@/components/dashboard/InterpretationCard";
-import ComponentGrid from "@/components/dashboard/ComponentGrid";
-import BuyTimingAnalysis from "@/components/dashboard/BuyTimingAnalysis";
-import SellTimingAnalysis from "@/components/dashboard/SellTimingAnalysis";
-import CrossAssetHeatmap from "@/components/dashboard/CrossAssetHeatmap";
-import HistoricalContext from "@/components/dashboard/HistoricalContext";
-import SparklineChart from "@/components/dashboard/SparklineChart";
-import ContextChart from "@/components/dashboard/ContextChart";
-import MethodologyDisclaimer from "@/components/dashboard/MethodologyDisclaimer";
-import ProPreview from "@/components/dashboard/ProPreview";
-import EmailCTA from "@/components/dashboard/EmailCTA";
-import { interpretations } from "@/data/interpretations";
+import HookSection from "@/components/dashboard/HookSection";
+import PercentileContext from "@/components/dashboard/PercentileContext";
+import StoryCard from "@/components/dashboard/StoryCard";
+import VerdictSection from "@/components/dashboard/VerdictSection";
+import FinePrintSection from "@/components/dashboard/FinePrintSection";
 import {
   getCurrentSnapshot,
-  getHistory,
-  getBuyTiming,
-  getSellTiming,
-  getHeatmap,
   getHistoricalContext,
-  getPostSignalPaths,
+  getSimilarCaseReturns,
+  getAllMatchingCaseReturns,
+  getRollingOccurrences,
+  getConsensusSummary,
+  getChartPriceData,
+  getSignalSources,
 } from "@/lib/data/dashboardData";
-import { getKfgiPriceData } from "@/lib/data/chartData";
 
-export default function DashboardPage() {
-  const snapshot = getCurrentSnapshot();
-  const history = getHistory();
-  const buyTiming = getBuyTiming();
-  const sellTiming = getSellTiming();
-  const heatmap = getHeatmap();
-  const context = getHistoricalContext();
-  const chartData = getKfgiPriceData();
-  const buyPaths = getPostSignalPaths('buy');
-  const sellPaths = getPostSignalPaths('sell');
+export default async function DashboardPage() {
+  const snapshot = await getCurrentSnapshot();
+  const [context, displayCases, allMatchingCases, rollingOccurrences] = await Promise.all([
+    getHistoricalContext(),
+    getSimilarCaseReturns(),
+    getAllMatchingCaseReturns(),
+    getRollingOccurrences(),
+  ]);
+  const consensus = getConsensusSummary(allMatchingCases);
+  const chartData = await getChartPriceData();
 
-  const { score, regime, change, date, vkospiRaw, signals } = snapshot;
-  const info = interpretations[regime];
+  const { score, regime, change, date, signals } = snapshot;
+  const { mock } = getSignalSources();
+  const mockRatio = mock.length / 7;
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-6 flex flex-col gap-6">
-      {/* ── Briefing headline ── */}
-      <div>
-        <p className="text-xs text-gray-500 uppercase tracking-widest font-medium mb-1">
-          {date} 기준 · K-FGI 시장 심리 브리핑
-        </p>
-        <h1 className="text-2xl md:text-3xl font-black text-white leading-tight">
-          시장은 지금{" "}
-          <span style={{ color: info.color }}>{info.label}</span>{" "}
-          구간입니다
-        </h1>
-        <p className="text-sm text-gray-400 mt-2 leading-relaxed max-w-2xl">
-          {info.interpretation}
-        </p>
-      </div>
+    <div className="max-w-[1280px] mx-auto px-4 md:px-6 py-6 flex flex-col gap-6">
 
-      {/* ── Hero: score + driving factors + key action ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-1">
-          <ScoreGauge score={score} regime={regime} change={change} vkospiRaw={vkospiRaw} />
+      {/* Mock fallback 경고 배너 (50% 초과 시) */}
+      {mockRatio > 0.5 && (
+        <div
+          className="rounded-[var(--radius-md)] px-4 py-3 text-sm border"
+          style={{
+            background: 'color-mix(in srgb, var(--warning) 10%, var(--surface))',
+            borderColor: 'color-mix(in srgb, var(--warning) 30%, var(--border))',
+            color: 'var(--warning)',
+          }}
+        >
+          실시간 데이터 소스 {mock.length}/7개가 일시적으로 불안정하여 대체 데이터를 사용 중입니다.
+          점수가 실제와 다를 수 있습니다.
         </div>
-        <div className="lg:col-span-2 flex flex-col gap-4">
-          <InterpretationCard regime={regime} />
-          {/* Inline action strip — the "so what" */}
-          <div
-            className="rounded-lg px-4 py-3 border flex items-start gap-3"
-            style={{
-              backgroundColor: `color-mix(in srgb, ${info.color} 6%, #111827)`,
-              borderColor: `color-mix(in srgb, ${info.color} 20%, #1f2937)`,
-            }}
+      )}
+
+      {/* ━━ 1) HOOK — 첫 뷰포트: 점수 + 행동 가이드 + 백분위/승률 한 줄 ━━ */}
+      <HookSection
+        score={score}
+        regime={regime}
+        change={change}
+        date={date}
+        percentile={context.percentile}
+        winRate90d={consensus.winRate90d}
+        totalCases={consensus.totalCases}
+      />
+
+      {/* ━━ 2) CONTEXT — 역사적 위치 ━━ */}
+      <PercentileContext
+        percentile={context.percentile}
+        totalOccurrences={rollingOccurrences}
+        currentScore={score}
+      />
+
+      {/* ━━ 3) STORIES — 대표 사례 카드 ━━ */}
+      {displayCases.length > 0 && (
+        <section className="flex flex-col gap-4">
+          <p
+            className="font-mono text-[11px] tracking-[0.08em] uppercase"
+            style={{ color: 'var(--text-3)' }}
           >
-            <span className="text-base mt-0.5" style={{ color: info.color }}>→</span>
-            <div>
-              <p className="text-sm font-semibold text-white">{info.usagePoints[0]}</p>
-              {info.usagePoints[1] && (
-                <p className="text-xs text-gray-400 mt-1">{info.usagePoints[1]}</p>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
+            과거 유사 구간(±10점) 주요 이벤트 대표 사례
+          </p>
+          {displayCases.map((case_, i) => (
+            <StoryCard
+              key={case_.date}
+              case_={case_}
+              currentScore={score}
+              index={i}
+            />
+          ))}
+        </section>
+      )}
 
-      {/* ── Context chart: K-FGI vs asset price ── */}
-      <ContextChart data={chartData} />
+      {/* ━━ 4) VERDICT — 컨센서스 ━━ */}
+      <VerdictSection consensus={consensus} />
 
-      {/* ── 7 signals today ── */}
-      <ComponentGrid signals={signals} />
-
-      {/* ── Buy timing analysis ── */}
-      <BuyTimingAnalysis data={buyTiming} pathData={buyPaths} />
-
-      {/* ── Sell timing analysis ── */}
-      <SellTimingAnalysis data={sellTiming} pathData={sellPaths} />
-
-      {/* ── Cross-asset heatmap ── */}
-      <CrossAssetHeatmap data={heatmap} />
-
-      {/* ── Historical context ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <SparklineChart history={history} />
-        <HistoricalContext data={context} />
-      </div>
-
-      {/* ── Methodology & disclaimer ── */}
-      <MethodologyDisclaimer />
-
-      {/* ── Pro + subscription (non-interrupting, at bottom) ── */}
-      <div className="flex flex-col gap-4 mt-2">
-        <ProPreview />
-        <EmailCTA />
-      </div>
+      {/* ━━ 5) FINE PRINT — 접힘식 상세 데이터 ━━ */}
+      <FinePrintSection signals={signals} chartData={chartData} />
     </div>
   );
 }

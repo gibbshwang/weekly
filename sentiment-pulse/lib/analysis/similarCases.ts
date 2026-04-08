@@ -1,4 +1,5 @@
 import type { HistoryPoint, HistoricalEvent } from '../types/kfgi';
+import { SIMILAR_CASES_DISPLAY_COUNT, MIN_DAYS_BETWEEN_CASES } from '../config/constants';
 
 /**
  * Find the N most similar historical cases to the current score.
@@ -12,8 +13,8 @@ import type { HistoryPoint, HistoricalEvent } from '../types/kfgi';
 export function findSimilarCases(
   currentScore: number,
   history: HistoryPoint[],
-  topN: number = 3,
-  minDaysApart: number = 30,
+  topN: number = SIMILAR_CASES_DISPLAY_COUNT,
+  minDaysApart: number = MIN_DAYS_BETWEEN_CASES,
 ): HistoricalEvent[] {
   // Sort by similarity (smallest |score - currentScore| first)
   const candidates = history

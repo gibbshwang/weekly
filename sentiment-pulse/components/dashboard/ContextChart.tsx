@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   LineChart,
   Line,
@@ -16,6 +16,7 @@ import type {
   KfgiPricePoint,
   KfgiPriceData,
 } from "@/lib/types/charts";
+import { useContainerReady } from "@/lib/hooks/useContainerReady";
 
 const ASSETS: { key: ChartAsset; label: string }[] = [
   { key: "KOSPI", label: "KOSPI" },
@@ -35,8 +36,6 @@ interface ContextChartProps {
   data: KfgiPriceData;
 }
 
-/* ── Tooltip ── */
-
 interface TooltipPayloadEntry {
   dataKey: string;
   value: number;
@@ -54,10 +53,13 @@ function CustomTooltip({ active, payload, selectedAsset }: CustomTooltipProps) {
   if (!active || !payload?.length) return null;
   const pt = payload[0].payload;
   return (
-    <div className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs">
-      <p className="text-gray-400">{pt.date}</p>
-      <p className="text-blue-400 font-semibold mt-1">K-FGI {pt.score}</p>
-      <p className="text-emerald-400 font-semibold">
+    <div
+      className="rounded-[var(--radius-md)] px-3 py-2 text-xs font-data"
+      style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
+    >
+      <p style={{ color: 'var(--text-3)' }}>{pt.date}</p>
+      <p className="font-semibold mt-1" style={{ color: '#60a5fa' }}>Fear & Greed {pt.score}</p>
+      <p className="font-semibold" style={{ color: 'var(--greed)' }}>
         {selectedAsset} {pt.priceIndex.toFixed(1)}
       </p>
     </div>
@@ -70,46 +72,43 @@ function formatXDate(dateStr: string) {
 }
 
 export default function ContextChart({ data }: ContextChartProps) {
-  const [mounted, setMounted] = useState(false);
+  const [containerRef, ready] = useContainerReady();
   const [asset, setAsset] = useState<ChartAsset>("KOSPI");
   const [range, setRange] = useState<TimeRange>("3M");
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
   const series: KfgiPricePoint[] = data[asset]?.[range] ?? [];
 
-  // Compute priceIndex Y domain
   const prices = series.map((d) => d.priceIndex);
   const pMin = prices.length ? Math.floor(Math.min(...prices) - 2) : 90;
   const pMax = prices.length ? Math.ceil(Math.max(...prices) + 2) : 110;
 
-  // X-axis tick interval
   const tickInterval = series.length > 60 ? 9 : series.length > 30 ? 4 : 2;
 
   return (
-    <div className="bg-gray-900 rounded-xl p-4 md:p-5 border border-gray-800 flex flex-col gap-3">
+    <div
+      className="rounded-[var(--radius-lg)] p-4 md:p-5 border flex flex-col gap-3"
+      style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
+    >
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div>
-          <h2 className="text-sm font-bold text-white">시장 심리 vs 자산 가격</h2>
-          <p className="text-xs text-gray-500 mt-0.5">
-            K-FGI 지수와 자산 가격(리베이스) 비교
+          <h2 className="font-body text-sm font-semibold" style={{ color: 'var(--text-1)' }}>시장 심리 vs 자산 가격</h2>
+          <p className="text-xs mt-0.5" style={{ color: 'var(--text-3)' }}>
+            심리지수와 자산 가격(리베이스) 비교
           </p>
         </div>
 
         {/* Range selector */}
-        <div className="flex gap-1">
+        <div className="flex gap-0.5 rounded-[var(--radius-md)] p-0.5" style={{ background: 'var(--bg)' }}>
           {RANGES.map((r) => (
             <button
               key={r.key}
               onClick={() => setRange(r.key)}
-              className={`px-2.5 py-1 text-xs rounded-md transition-colors ${
-                range === r.key
-                  ? "bg-gray-700 text-white font-semibold"
-                  : "text-gray-500 hover:text-gray-300"
-              }`}
+              className="px-2.5 py-1 text-xs rounded-[6px] font-medium transition-all"
+              style={{
+                background: range === r.key ? 'var(--surface)' : 'transparent',
+                color: range === r.key ? 'var(--text-1)' : 'var(--text-3)',
+              }}
             >
               {r.label}
             </button>
@@ -123,11 +122,12 @@ export default function ContextChart({ data }: ContextChartProps) {
           <button
             key={a.key}
             onClick={() => setAsset(a.key)}
-            className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
-              asset === a.key
-                ? "border-emerald-600 bg-emerald-950/50 text-emerald-400 font-semibold"
-                : "border-gray-700 text-gray-500 hover:text-gray-300 hover:border-gray-600"
-            }`}
+            className="px-3 py-1.5 text-xs rounded-[var(--radius-md)] border transition-colors font-medium"
+            style={{
+              borderColor: asset === a.key ? 'var(--greed)' : 'var(--border)',
+              background: asset === a.key ? 'color-mix(in srgb, var(--greed) 10%, var(--surface))' : 'transparent',
+              color: asset === a.key ? 'var(--greed)' : 'var(--text-3)',
+            }}
           >
             {a.label}
           </button>
@@ -135,20 +135,19 @@ export default function ContextChart({ data }: ContextChartProps) {
       </div>
 
       {/* Chart */}
-      <div className="h-64 min-w-0 overflow-hidden">
-        {mounted && series.length > 0 ? (
-          <ResponsiveContainer width="100%" height="100%">
+      <div ref={containerRef} className="h-64 min-w-0 overflow-hidden">
+        {ready && series.length > 0 ? (
+          <ResponsiveContainer width="100%" height="100%" minWidth={0}>
             <LineChart data={series} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#1e1e26" />
               <XAxis
                 dataKey="date"
                 tickFormatter={formatXDate}
-                tick={{ fill: "#6b7280", fontSize: 10 }}
+                tick={{ fill: "#4a4a54", fontSize: 10 }}
                 tickLine={false}
-                axisLine={{ stroke: "#374151" }}
+                axisLine={{ stroke: "#1e1e26" }}
                 interval={tickInterval}
               />
-              {/* Left Y: K-FGI 0-100 */}
               <YAxis
                 yAxisId="left"
                 domain={[0, 100]}
@@ -157,12 +156,11 @@ export default function ContextChart({ data }: ContextChartProps) {
                 axisLine={false}
                 width={30}
               />
-              {/* Right Y: Price index */}
               <YAxis
                 yAxisId="right"
                 orientation="right"
                 domain={[pMin, pMax]}
-                tick={{ fill: "#34d399", fontSize: 10 }}
+                tick={{ fill: "#22c55e", fontSize: 10 }}
                 tickLine={false}
                 axisLine={false}
                 width={35}
@@ -177,23 +175,23 @@ export default function ContextChart({ data }: ContextChartProps) {
                 stroke="#60a5fa"
                 strokeWidth={2}
                 dot={false}
-                name="K-FGI"
+                name="Fear & Greed"
               />
               <Line
                 yAxisId="right"
                 type="monotone"
                 dataKey="priceIndex"
-                stroke="#34d399"
+                stroke="#22c55e"
                 strokeWidth={2}
                 dot={false}
                 name={asset}
               />
             </LineChart>
           </ResponsiveContainer>
-        ) : !mounted ? (
-          <div className="w-full h-full bg-gray-800/30 rounded animate-pulse" />
+        ) : !ready ? (
+          <div className="w-full h-full rounded animate-pulse" style={{ background: 'var(--border)' }} />
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-sm text-gray-600">
+          <div className="w-full h-full flex items-center justify-center text-sm" style={{ color: 'var(--text-3)' }}>
             데이터 없음
           </div>
         )}
@@ -202,12 +200,12 @@ export default function ContextChart({ data }: ContextChartProps) {
       {/* Legend */}
       <div className="flex gap-4 text-xs">
         <div className="flex items-center gap-1.5">
-          <div className="w-3 h-0.5 bg-blue-400 rounded" />
-          <span className="text-gray-500">K-FGI (0–100)</span>
+          <div className="w-3 h-0.5 rounded" style={{ background: '#60a5fa' }} />
+          <span style={{ color: 'var(--text-3)' }}>Fear & Greed (0–100)</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <div className="w-3 h-0.5 bg-emerald-400 rounded" />
-          <span className="text-gray-500">{asset} 가격 (리베이스 100)</span>
+          <div className="w-3 h-0.5 rounded" style={{ background: '#22c55e' }} />
+          <span style={{ color: 'var(--text-3)' }}>{asset} 가격 (리베이스 100)</span>
         </div>
       </div>
     </div>
