@@ -59,7 +59,10 @@ function CustomTooltip({ active, payload }: CustomTooltipProps) {
 
 export default function HistoryChart({ data }: { data: HistoryPoint[] }) {
   const [mounted, setMounted] = useState(false);
-  useEffect(() => { setMounted(true); }, []);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setMounted(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
 
   return (
     <div className="h-72 min-w-0 overflow-hidden">

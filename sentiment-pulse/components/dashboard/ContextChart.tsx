@@ -76,7 +76,8 @@ export default function ContextChart({ data }: ContextChartProps) {
   const [range, setRange] = useState<TimeRange>("3M");
 
   useEffect(() => {
-    setMounted(true);
+    const id = requestAnimationFrame(() => setMounted(true));
+    return () => cancelAnimationFrame(id);
   }, []);
 
   const series: KfgiPricePoint[] = data[asset]?.[range] ?? [];

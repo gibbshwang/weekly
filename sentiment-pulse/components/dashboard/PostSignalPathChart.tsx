@@ -62,7 +62,8 @@ export default function PostSignalPathChart({
 }: PostSignalPathChartProps) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
-    setMounted(true);
+    const id = requestAnimationFrame(() => setMounted(true));
+    return () => cancelAnimationFrame(id);
   }, []);
 
   const lineColor = color ?? (type ? LINE_COLORS[type] : "#6b7280");

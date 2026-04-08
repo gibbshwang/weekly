@@ -69,7 +69,10 @@ function formatXDate(dateStr: string) {
 
 export default function SparklineChart({ history }: SparklineChartProps) {
   const [mounted, setMounted] = useState(false);
-  useEffect(() => { setMounted(true); }, []);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setMounted(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
 
   return (
     <div
