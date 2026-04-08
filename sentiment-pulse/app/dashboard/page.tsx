@@ -11,6 +11,7 @@ import {
   getRollingOccurrences,
   getConsensusSummary,
   getChartPriceData,
+  getSignalSources,
 } from "@/lib/data/dashboardData";
 
 export default async function DashboardPage() {
@@ -24,10 +25,27 @@ export default async function DashboardPage() {
   const consensus = getConsensusSummary(allMatchingCases);
   const chartData = await getChartPriceData();
 
-  const { score, regime, change, date, vkospiRaw, signals } = snapshot;
+  const { score, regime, change, date, signals } = snapshot;
+  const { mock } = getSignalSources();
+  const mockRatio = mock.length / 7;
 
   return (
     <div className="max-w-[1280px] mx-auto px-4 md:px-6 py-6 flex flex-col gap-6">
+
+      {/* Mock fallback 경고 배너 (50% 초과 시) */}
+      {mockRatio > 0.5 && (
+        <div
+          className="rounded-[var(--radius-md)] px-4 py-3 text-sm border"
+          style={{
+            background: 'color-mix(in srgb, var(--warning) 10%, var(--surface))',
+            borderColor: 'color-mix(in srgb, var(--warning) 30%, var(--border))',
+            color: 'var(--warning)',
+          }}
+        >
+          실시간 데이터 소스 {mock.length}/7개가 일시적으로 불안정하여 대체 데이터를 사용 중입니다.
+          점수가 실제와 다를 수 있습니다.
+        </div>
+      )}
 
       {/* ━━ 1) HOOK — 첫 뷰포트: 점수 + 행동 가이드 + 백분위/승률 한 줄 ━━ */}
       <HookSection
@@ -35,7 +53,6 @@ export default async function DashboardPage() {
         regime={regime}
         change={change}
         date={date}
-        vkospiRaw={vkospiRaw}
         percentile={context.percentile}
         winRate90d={consensus.winRate90d}
         totalCases={consensus.totalCases}

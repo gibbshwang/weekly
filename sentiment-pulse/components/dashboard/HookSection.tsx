@@ -7,7 +7,6 @@ interface HookSectionProps {
   regime: RegimeType;
   change: number;
   date: string;
-  vkospiRaw: number | null;
   percentile: number;
   winRate90d: number;
   totalCases: number;
@@ -18,7 +17,6 @@ export default function HookSection({
   regime,
   change,
   date,
-  vkospiRaw,
   percentile,
   winRate90d,
   totalCases,
@@ -38,7 +36,7 @@ export default function HookSection({
 
       <div className="grid grid-cols-1 lg:grid-cols-[200px_1fr] gap-4">
         {/* Score gauge — 점수가 먼저 */}
-        <ScoreGauge score={score} regime={regime} change={change} vkospiRaw={vkospiRaw} />
+        <ScoreGauge score={score} regime={regime} change={change} />
 
         {/* Action guide */}
         <div

@@ -21,10 +21,10 @@ export default function StoryCard({ case_, currentScore, index }: StoryCardProps
   const scoreDiff = Math.abs(currentScore - case_.score);
   const scoreColor = getScoreColor(case_.score);
 
-  // Adapt pricePath to PostSignalPathData format for the mini chart
+  // Adapt pricePath to PostSignalPathData format for the mini chart (filter null points)
   const chartData: PostSignalPathData = {
     asset: 'KOSPI',
-    points: case_.pricePath,
+    points: case_.pricePath.filter((p): p is { day: number; avgReturn: number } => p.avgReturn !== null),
   };
 
   return (

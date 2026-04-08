@@ -17,7 +17,7 @@ export interface SimilarCaseWithReturns {
   score: number;
   note: string;
   returns: CaseReturn[];
-  pricePath: { day: number; avgReturn: number }[];
+  pricePath: { day: number; avgReturn: number | null }[];
 }
 
 export interface ConsensusSummary {

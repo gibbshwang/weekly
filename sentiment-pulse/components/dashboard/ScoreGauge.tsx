@@ -1,31 +1,16 @@
 "use client";
 
 import { interpretations } from "@/data/interpretations";
+import { getScoreColor, REGIME_COLORS } from "@/lib/constants/regime";
+import { REGIME_THRESHOLDS } from "@/lib/config/regime";
 
 interface ScoreGaugeProps {
   score: number;
   regime: "extreme_fear" | "fear" | "neutral" | "greed" | "extreme_greed";
   change: number;
-  vkospiRaw: number | null;
 }
 
-const REGIME_COLORS: Record<string, string> = {
-  extreme_fear: "#dc2626",
-  fear: "#ef4444",
-  neutral: "#6b7280",
-  greed: "#22c55e",
-  extreme_greed: "#d97706",
-};
-
-function getScoreColor(score: number): string {
-  if (score <= 24) return REGIME_COLORS.extreme_fear;
-  if (score <= 44) return REGIME_COLORS.fear;
-  if (score <= 55) return REGIME_COLORS.neutral;
-  if (score <= 74) return REGIME_COLORS.greed;
-  return REGIME_COLORS.extreme_greed;
-}
-
-export default function ScoreGauge({ score, regime, change, vkospiRaw }: ScoreGaugeProps) {
+export default function ScoreGauge({ score, regime, change }: ScoreGaugeProps) {
   const color = getScoreColor(score);
 
   // SVG arc gauge parameters
@@ -52,13 +37,11 @@ export default function ScoreGauge({ score, regime, change, vkospiRaw }: ScoreGa
   const needleX = cx + needleLen * Math.cos(toRad(needleAngle));
   const needleY = cy + needleLen * Math.sin(toRad(needleAngle));
 
-  const zones = [
-    { from: 0, to: 25, color: REGIME_COLORS.extreme_fear },
-    { from: 25, to: 45, color: REGIME_COLORS.fear },
-    { from: 45, to: 56, color: REGIME_COLORS.neutral },
-    { from: 56, to: 75, color: REGIME_COLORS.greed },
-    { from: 75, to: 100, color: REGIME_COLORS.extreme_greed },
-  ];
+  const zones = REGIME_THRESHOLDS.map(t => ({
+    from: t.min,
+    to: t.max + 1,
+    color: REGIME_COLORS[t.regime],
+  }));
 
   const zoneArcPath = (fromScore: number, toScore: number, radius: number) => {
     const fa = startAngle + (fromScore / 100) * totalAngle;

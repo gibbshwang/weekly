@@ -1,23 +1,8 @@
 import Link from "next/link";
 import { getHistory, getHistoricalContext } from "@/lib/data/dashboardData";
 import HistoryChart from "@/components/history/HistoryChart";
+import { getScoreColor } from "@/lib/constants/regime";
 import type { HistoricalEvent } from "@/lib/types/kfgi";
-
-const REGIME_COLORS: Record<string, string> = {
-  extreme_fear: "#dc2626",
-  fear: "#ef4444",
-  neutral: "#6b7280",
-  greed: "#22c55e",
-  extreme_greed: "#d97706",
-};
-
-function getScoreColor(score: number): string {
-  if (score <= 24) return REGIME_COLORS.extreme_fear;
-  if (score <= 44) return REGIME_COLORS.fear;
-  if (score <= 55) return REGIME_COLORS.neutral;
-  if (score <= 74) return REGIME_COLORS.greed;
-  return REGIME_COLORS.extreme_greed;
-}
 
 function formatDate(dateStr: string) {
   const d = new Date(dateStr);

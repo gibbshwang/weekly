@@ -12,25 +12,11 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import type { HistoryPoint } from "@/lib/types/kfgi";
+import { getScoreColor, REGIME_COLORS } from "@/lib/constants/regime";
+import { REGIME_THRESHOLDS } from "@/lib/config/regime";
 
 interface SparklineChartProps {
   history: HistoryPoint[];
-}
-
-const REGIME_COLORS: Record<string, string> = {
-  extreme_fear: "#dc2626",
-  fear: "#ef4444",
-  neutral: "#6b7280",
-  greed: "#22c55e",
-  extreme_greed: "#d97706",
-};
-
-function getScoreColor(score: number): string {
-  if (score <= 24) return REGIME_COLORS.extreme_fear;
-  if (score <= 44) return REGIME_COLORS.fear;
-  if (score <= 55) return REGIME_COLORS.neutral;
-  if (score <= 74) return REGIME_COLORS.greed;
-  return REGIME_COLORS.extreme_greed;
 }
 
 interface CustomDotProps {
@@ -131,10 +117,9 @@ export default function SparklineChart({ history }: SparklineChartProps) {
                 axisLine={false}
               />
               <Tooltip content={<CustomTooltip />} />
-              <ReferenceLine y={25} stroke="#dc2626" strokeDasharray="3 3" strokeOpacity={0.5} />
-              <ReferenceLine y={45} stroke="#ef4444" strokeDasharray="3 3" strokeOpacity={0.5} />
-              <ReferenceLine y={56} stroke="#6b7280" strokeDasharray="3 3" strokeOpacity={0.5} />
-              <ReferenceLine y={75} stroke="#22c55e" strokeDasharray="3 3" strokeOpacity={0.5} />
+              {REGIME_THRESHOLDS.slice(0, -1).map(t => (
+                <ReferenceLine key={t.regime} y={t.max + 1} stroke={t.color} strokeDasharray="3 3" strokeOpacity={0.5} />
+              ))}
               <Line
                 type="monotone"
                 dataKey="score"
@@ -151,11 +136,9 @@ export default function SparklineChart({ history }: SparklineChartProps) {
       </div>
 
       <div className="flex justify-between text-xs font-data px-1">
-        <span style={{ color: '#dc2626' }}>0 극단적공포</span>
-        <span style={{ color: '#ef4444' }}>25 공포</span>
-        <span style={{ color: '#6b7280' }}>45 중립</span>
-        <span style={{ color: '#22c55e' }}>56 탐욕</span>
-        <span style={{ color: '#d97706' }}>75 극단적탐욕</span>
+        {REGIME_THRESHOLDS.map(t => (
+          <span key={t.regime} style={{ color: t.color }}>{t.min} {t.label}</span>
+        ))}
       </div>
     </div>
   );

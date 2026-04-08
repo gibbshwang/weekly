@@ -18,47 +18,12 @@ import {
   YAHOO_SYMBOLS,
   RANGE_TRADING_DAYS as RANGE_DAYS_CONFIG,
 } from '../config/constants';
-
-// ── Yahoo Finance price fetcher (server-side) ──
+import { fetchYahooPrices } from '../api/yahoo';
 
 interface PricePoint {
   date: string;
   close: number;
   volume?: number;
-}
-
-async function fetchYahooPrices(
-  symbol: string,
-  range: string = '3y',
-): Promise<PricePoint[]> {
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=${range}&interval=1d`;
-
-  const res = await fetch(url, {
-    headers: { 'User-Agent': 'Mozilla/5.0' },
-    next: { revalidate: 86400 }, // cache 24 hours (daily cron refresh)
-  });
-
-  if (!res.ok) return [];
-
-  const data = await res.json();
-  const result = data.chart?.result?.[0];
-  if (!result?.timestamp || !result?.indicators?.quote?.[0]) return [];
-
-  const quotes = result.indicators.quote[0];
-  const points: PricePoint[] = [];
-
-  for (let i = 0; i < result.timestamp.length; i++) {
-    const close = quotes.close[i];
-    if (close == null) continue;
-    const d = new Date(result.timestamp[i] * 1000);
-    points.push({
-      date: d.toISOString().slice(0, 10),
-      close,
-      volume: quotes.volume?.[i] ?? undefined,
-    });
-  }
-
-  return points;
 }
 
 // ── Compute rolling K-FGI scores from all market data ──
@@ -119,12 +84,12 @@ function computeRollingScores(allPrices: AllPriceSeries): HistoryPoint[] {
       volRaw = Math.sqrt(variance) * Math.sqrt(252) * 100;
     }
 
-    // 3. strength: distance from 52-week high
+    // 3. strength: distance from 52-week high (min 125 days for meaningful lookback)
     let strengthRaw: number | null = null;
-    if (i >= 20) {
+    if (i >= 125) {
       const lookback = Math.min(i, 250);
       const windowPrices = kospi.slice(i - lookback, i + 1);
-      const high52w = Math.max(...windowPrices.map(p => p.close));
+      const high52w = windowPrices.reduce((max, p) => p.close > max ? p.close : max, -Infinity);
       const ratio = current / high52w;
       strengthRaw = 0.1 + (ratio - 0.7) / (1.0 - 0.7) * (0.9 - 0.1);
       strengthRaw = Math.max(0.1, Math.min(0.9, strengthRaw));
@@ -230,39 +195,43 @@ interface RawAssetPrices {
   CorpBond: PricePoint[];
 }
 
-let _cachedRawPrices: RawAssetPrices | null = null;
-let _cachedRollingScores: HistoryPoint[] | null = null;
+let _rawPricesPromise: Promise<RawAssetPrices> | null = null;
+let _rollingScoresPromise: Promise<HistoryPoint[]> | null = null;
 
 async function getRawAssetPrices(): Promise<RawAssetPrices> {
-  if (_cachedRawPrices) return _cachedRawPrices;
-  const [KOSPI, KOSDAQ, BTC, Gold, KODEX200, KODEXInverse, GovtBond, CorpBond] = await Promise.all([
-    fetchYahooPrices(YAHOO_SYMBOLS.KOSPI, '3y'),
-    fetchYahooPrices(YAHOO_SYMBOLS.KOSDAQ, '3y'),
-    fetchYahooPrices(YAHOO_SYMBOLS.BTC, '3y'),
-    fetchYahooPrices(YAHOO_SYMBOLS.Gold, '3y'),
-    fetchYahooPrices(YAHOO_SYMBOLS.KODEX200, '3y'),
-    fetchYahooPrices(YAHOO_SYMBOLS.KODEXInverse, '3y'),
-    fetchYahooPrices(YAHOO_SYMBOLS.GovtBond, '3y'),
-    fetchYahooPrices(YAHOO_SYMBOLS.CorpBond, '3y'),
-  ]);
-  _cachedRawPrices = { KOSPI, KOSDAQ, BTC, Gold, KODEX200, KODEXInverse, GovtBond, CorpBond };
-  return _cachedRawPrices;
+  if (!_rawPricesPromise) {
+    _rawPricesPromise = Promise.all([
+      fetchYahooPrices(YAHOO_SYMBOLS.KOSPI, '3y'),
+      fetchYahooPrices(YAHOO_SYMBOLS.KOSDAQ, '3y'),
+      fetchYahooPrices(YAHOO_SYMBOLS.BTC, '3y'),
+      fetchYahooPrices(YAHOO_SYMBOLS.Gold, '3y'),
+      fetchYahooPrices(YAHOO_SYMBOLS.KODEX200, '3y'),
+      fetchYahooPrices(YAHOO_SYMBOLS.KODEXInverse, '3y'),
+      fetchYahooPrices(YAHOO_SYMBOLS.GovtBond, '3y'),
+      fetchYahooPrices(YAHOO_SYMBOLS.CorpBond, '3y'),
+    ]).then(([KOSPI, KOSDAQ, BTC, Gold, KODEX200, KODEXInverse, GovtBond, CorpBond]) =>
+      ({ KOSPI, KOSDAQ, BTC, Gold, KODEX200, KODEXInverse, GovtBond, CorpBond })
+    );
+  }
+  return _rawPricesPromise;
 }
 
 // ── Exported rolling scores (used by dashboardData for history) ──
 
 export async function getRollingScores(): Promise<HistoryPoint[]> {
-  if (_cachedRollingScores) return _cachedRollingScores;
-  const rawPrices = await getRawAssetPrices();
-  _cachedRollingScores = computeRollingScores({
-    kospi: rawPrices.KOSPI,
-    kosdaq: rawPrices.KOSDAQ,
-    kodex200: rawPrices.KODEX200,
-    kodexInverse: rawPrices.KODEXInverse,
-    govtBond: rawPrices.GovtBond,
-    corpBond: rawPrices.CorpBond,
-  });
-  return _cachedRollingScores;
+  if (!_rollingScoresPromise) {
+    _rollingScoresPromise = getRawAssetPrices().then(rawPrices =>
+      computeRollingScores({
+        kospi: rawPrices.KOSPI,
+        kosdaq: rawPrices.KOSDAQ,
+        kodex200: rawPrices.KODEX200,
+        kodexInverse: rawPrices.KODEXInverse,
+        govtBond: rawPrices.GovtBond,
+        corpBond: rawPrices.CorpBond,
+      })
+    );
+  }
+  return _rollingScoresPromise;
 }
 
 // ── Yahoo symbol mapping (from central config) ──
@@ -326,27 +295,28 @@ function buildKfgiPriceSeries(
 
 // ── Exported async function ──
 
-let _cachedData: KfgiPriceData | null = null;
+let _kfgiPricePromise: Promise<KfgiPriceData> | null = null;
 
 export async function getKfgiPriceData(): Promise<KfgiPriceData> {
-  if (_cachedData) return _cachedData;
+  if (!_kfgiPricePromise) {
+    _kfgiPricePromise = (async () => {
+      const rawPrices = await getRawAssetPrices();
+      const scores = await getRollingScores();
 
-  const rawPrices = await getRawAssetPrices();
-  const scores = await getRollingScores();
+      const data = {} as KfgiPriceData;
+      const ranges: TimeRange[] = ['1M', '3M', '6M', '1Y'];
+      const assets: ChartAsset[] = ['KOSPI', 'KOSDAQ', 'BTC', 'Gold'];
 
-  const data = {} as KfgiPriceData;
-  const ranges: TimeRange[] = ['1M', '3M', '6M', '1Y'];
-  const assets: ChartAsset[] = ['KOSPI', 'KOSDAQ', 'BTC', 'Gold'];
-
-  for (const asset of assets) {
-    data[asset] = {} as Record<TimeRange, KfgiPricePoint[]>;
-    for (const range of ranges) {
-      data[asset][range] = buildKfgiPriceSeries(scores, rawPrices[asset], range);
-    }
+      for (const asset of assets) {
+        data[asset] = {} as Record<TimeRange, KfgiPricePoint[]>;
+        for (const range of ranges) {
+          data[asset][range] = buildKfgiPriceSeries(scores, rawPrices[asset], range);
+        }
+      }
+      return data;
+    })();
   }
-
-  _cachedData = data;
-  return data;
+  return _kfgiPricePromise;
 }
 
 // ── Auto-computed forward returns for every trading day ──
@@ -384,58 +354,60 @@ function findForwardPrice(
  * Yahoo Finance 3년 데이터를 사용하므로 매일 자동으로 새 거래일이 포함됩니다.
  * 최근 90일 이내의 거래일은 90d return이 null (아직 미래 데이터 없음).
  */
-let _cachedAutoReturns: AutoComputedCase[] | null = null;
+let _autoReturnsPromise: Promise<AutoComputedCase[]> | null = null;
 
 export async function getAutoComputedReturns(): Promise<AutoComputedCase[]> {
-  if (_cachedAutoReturns) return _cachedAutoReturns;
+  if (!_autoReturnsPromise) {
+    _autoReturnsPromise = (async () => {
+      const [scores, rawPrices] = await Promise.all([
+        getRollingScores(),
+        getRawAssetPrices(),
+      ]);
 
-  const [scores, rawPrices] = await Promise.all([
-    getRollingScores(),
-    getRawAssetPrices(),
-  ]);
-
-  // Build date→price maps for each asset
-  const priceMaps: Record<NarrativeAsset, Map<string, number>> = {
-    KOSPI: new Map(),
-    KOSDAQ: new Map(),
-    Gold: new Map(),
-    BTC: new Map(),
-  };
-  for (const asset of NARRATIVE_ASSETS) {
-    for (const pt of rawPrices[asset]) {
-      priceMaps[asset].set(pt.date, pt.close);
-    }
-  }
-
-  const cases: AutoComputedCase[] = [];
-
-  for (const pt of scores) {
-    const returns: CaseReturn[] = [];
-
-    for (const asset of NARRATIVE_ASSETS) {
-      const basePrice = priceMaps[asset].get(pt.date);
-      if (!basePrice) {
-        returns.push({ asset, return30d: null, return60d: null, return90d: null });
-        continue;
+      // Build date→price maps for each asset
+      const priceMaps: Record<NarrativeAsset, Map<string, number>> = {
+        KOSPI: new Map(),
+        KOSDAQ: new Map(),
+        Gold: new Map(),
+        BTC: new Map(),
+      };
+      for (const asset of NARRATIVE_ASSETS) {
+        for (const pt of rawPrices[asset]) {
+          priceMaps[asset].set(pt.date, pt.close);
+        }
       }
 
-      const p30 = findForwardPrice(priceMaps[asset], pt.date, 30);
-      const p60 = findForwardPrice(priceMaps[asset], pt.date, 60);
-      const p90 = findForwardPrice(priceMaps[asset], pt.date, 90);
+      const cases: AutoComputedCase[] = [];
 
-      returns.push({
-        asset,
-        return30d: p30 !== null ? Math.round(((p30 / basePrice) - 1) * 1000) / 10 : null,
-        return60d: p60 !== null ? Math.round(((p60 / basePrice) - 1) * 1000) / 10 : null,
-        return90d: p90 !== null ? Math.round(((p90 / basePrice) - 1) * 1000) / 10 : null,
-      });
-    }
+      for (const pt of scores) {
+        const returns: CaseReturn[] = [];
 
-    cases.push({ date: pt.date, score: pt.score, returns });
+        for (const asset of NARRATIVE_ASSETS) {
+          const basePrice = priceMaps[asset].get(pt.date);
+          if (!basePrice) {
+            returns.push({ asset, return30d: null, return60d: null, return90d: null });
+            continue;
+          }
+
+          const p30 = findForwardPrice(priceMaps[asset], pt.date, 30);
+          const p60 = findForwardPrice(priceMaps[asset], pt.date, 60);
+          const p90 = findForwardPrice(priceMaps[asset], pt.date, 90);
+
+          returns.push({
+            asset,
+            return30d: p30 !== null ? Math.round(((p30 / basePrice) - 1) * 1000) / 10 : null,
+            return60d: p60 !== null ? Math.round(((p60 / basePrice) - 1) * 1000) / 10 : null,
+            return90d: p90 !== null ? Math.round(((p90 / basePrice) - 1) * 1000) / 10 : null,
+          });
+        }
+
+        cases.push({ date: pt.date, score: pt.score, returns });
+      }
+
+      return cases;
+    })();
   }
-
-  _cachedAutoReturns = cases;
-  return cases;
+  return _autoReturnsPromise;
 }
 
 // ── Post-signal paths (now using auto-computed data) ──

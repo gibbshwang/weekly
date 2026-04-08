@@ -60,8 +60,11 @@ export async function getCurrentSnapshot(): Promise<DailyIndexSnapshot> {
     _liveSignals = live;
     _mockSignals = mock;
 
-    const today = new Date().toISOString().slice(0, 10);
-    _snapshot = buildSnapshot(today, signals, prevScore);
+    // Use last trading day from history (avoids weekend/holiday dates)
+    const lastTradingDay = history.length > 0
+      ? history[history.length - 1].date
+      : new Date().toISOString().slice(0, 10);
+    _snapshot = buildSnapshot(lastTradingDay, signals, prevScore);
   }
   return _snapshot;
 }
@@ -124,9 +127,12 @@ export async function getSimilarCaseReturns(): Promise<SimilarCaseWithReturns[]>
 
   return top3.map((c, i) => {
     const kospi = c.returns.find(r => r.asset === 'KOSPI');
-    const r30 = kospi?.return30d ?? 0;
-    const r60 = kospi?.return60d ?? 0;
-    const r90 = kospi?.return90d ?? 0;
+    const r30 = kospi?.return30d ?? null;
+    const r60 = kospi?.return60d ?? null;
+    const r90 = kospi?.return90d ?? null;
+
+    const interpolate = (a: number | null, b: number | null) =>
+      a !== null && b !== null ? Math.round((a + b) / 2 * 10) / 10 : null;
 
     return {
       date: c.date,
@@ -136,11 +142,11 @@ export async function getSimilarCaseReturns(): Promise<SimilarCaseWithReturns[]>
       returns: c.returns,
       pricePath: [
         { day: 0, avgReturn: 0 },
-        { day: 15, avgReturn: Math.round(r30 / 2 * 10) / 10 },
+        { day: 15, avgReturn: r30 !== null ? Math.round(r30 / 2 * 10) / 10 : null },
         { day: 30, avgReturn: r30 },
-        { day: 45, avgReturn: Math.round((r30 + r60) / 2 * 10) / 10 },
+        { day: 45, avgReturn: interpolate(r30, r60) },
         { day: 60, avgReturn: r60 },
-        { day: 75, avgReturn: Math.round((r60 + r90) / 2 * 10) / 10 },
+        { day: 75, avgReturn: interpolate(r60, r90) },
         { day: 90, avgReturn: r90 },
       ],
     };

@@ -25,16 +25,28 @@ interface PricePoint {
  * Fetch historical daily prices from Yahoo Finance.
  * Server-side only (no CORS issues).
  */
-async function fetchYahooPrices(
+export async function fetchYahooPrices(
   symbol: string,
   range: string = '1y',
 ): Promise<PricePoint[]> {
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=${range}&interval=1d`;
 
-  const res = await fetch(url, {
-    headers: { 'User-Agent': 'Mozilla/5.0' },
-    next: { revalidate: 86400 }, // cache 24 hours (daily cron refresh)
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
+
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+      signal: controller.signal,
+      next: { revalidate: 86400 }, // cache 24 hours (daily cron refresh)
+    });
+  } catch {
+    console.error(`Yahoo Finance fetch timeout/error for ${symbol}`);
+    return [];
+  } finally {
+    clearTimeout(timeout);
+  }
 
   if (!res.ok) {
     console.error(`Yahoo Finance fetch failed for ${symbol}: ${res.status}`);
@@ -55,9 +67,9 @@ async function fetchYahooPrices(
     points.push({
       date: d.toISOString().slice(0, 10),
       close,
-      volume: quotes.volume[i] ?? undefined,
-      high: quotes.high[i] ?? undefined,
-      low: quotes.low[i] ?? undefined,
+      volume: quotes.volume?.[i] ?? undefined,
+      high: quotes.high?.[i] ?? undefined,
+      low: quotes.low?.[i] ?? undefined,
     });
   }
 
@@ -133,7 +145,7 @@ export async function fetchStrengthProxy(): Promise<number | null> {
   if (prices.length < 20) return null;
 
   const current = prices[prices.length - 1].close;
-  const high52w = Math.max(...prices.map(p => p.close));
+  const high52w = prices.reduce((max, p) => p.close > max ? p.close : max, -Infinity);
 
   // ratio: 0.0 (at low) to 1.0 (at 52w high)
   const ratio = current / high52w;

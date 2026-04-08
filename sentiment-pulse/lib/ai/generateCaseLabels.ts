@@ -51,13 +51,29 @@ ${dateList}
       }],
     });
 
-    const text = message.content[0].type === 'text' ? message.content[0].text : '';
-    const parsed = JSON.parse(text) as CaseLabel[];
+    let text = message.content[0].type === 'text' ? message.content[0].text : '';
+
+    // Strip markdown code fences (```json ... ```)
+    text = text.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?```\s*$/i, '').trim();
+
+    const parsed = JSON.parse(text);
+
+    // Validate: must be an array with correct length
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      return cases.map(c => fallbackLabel(c));
+    }
 
     // Validate and merge with input dates
     return cases.map(c => {
-      const match = parsed.find(p => p.date === c.date);
-      if (match && match.label && match.note) {
+      // Normalize date comparison (YYYY-MM-DD)
+      const match = parsed.find((p: CaseLabel) =>
+        p.date?.slice(0, 10) === c.date.slice(0, 10)
+      );
+      if (
+        match &&
+        typeof match.label === 'string' && match.label.length > 0 && match.label.length <= 30 &&
+        typeof match.note === 'string' && match.note.length > 0 && match.note.length <= 80
+      ) {
         return { date: c.date, label: match.label, note: match.note };
       }
       return fallbackLabel(c);

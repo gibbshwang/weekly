@@ -1,9 +1,11 @@
 "use client";
 
 import { DirectionBadge } from "@/components/ui/Badge";
+import { getRegimeFromScore } from "@/lib/constants/regime";
+import type { RegimeType } from "@/lib/types/kfgi";
 import type { SignalReading } from "@/lib/types/kfgi";
 
-const SCORE_COLOR: Record<string, string> = {
+const REGIME_CSS_VARS: Record<RegimeType, string> = {
   extreme_fear: "var(--extreme-fear)",
   fear: "var(--fear)",
   neutral: "var(--neutral)",
@@ -12,11 +14,7 @@ const SCORE_COLOR: Record<string, string> = {
 };
 
 function getScoreColor(score: number): string {
-  if (score <= 24) return SCORE_COLOR.extreme_fear;
-  if (score <= 44) return SCORE_COLOR.fear;
-  if (score <= 55) return SCORE_COLOR.neutral;
-  if (score <= 74) return SCORE_COLOR.greed;
-  return SCORE_COLOR.extreme_greed;
+  return REGIME_CSS_VARS[getRegimeFromScore(score)];
 }
 
 type ComponentCardProps = Omit<SignalReading, 'key'>;
