@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.4.0] - 2026-04-12
+
+### Added
+- AI 이혼 법률 가이드 Phase 4: Persistence + Save Flow
+- Zustand saveStore (`saveStore.ts`): 저장 플로우 상태 관리 (idle → consent → google-login → saving → saved)
+- `POST /api/sessions`: Firebase Auth 토큰 검증 + Firestore 세션 저장 엔드포인트
+- `DELETE /api/account`: Firestore sessions 컬렉션 정리 추가 (기존 Auth 삭제에 추가)
+- `firestore.rules`: sessions 컬렉션 read/delete 권한 + write는 서버만
+- SaveConsentDialog: PIPA Article 23 동의 모달 (체크박스 + 약관 링크)
+- SaveButton: 결과 저장 버튼 (동의 → Google 로그인 → 저장 전체 플로우)
+- 위저드 결과 페이지에 SaveButton 연결
+- 33 new tests (총 171): saveStore 9, POST /api/sessions 10, DELETE /api/account 8, SaveConsentDialog 3, SaveButton 3
+
+### Fixed
+- `account/route.ts`: server-only 임포트 추가
+- `sessions/route.ts`: malformed JSON 요청 → 400 에러 처리 (try-catch)
+- `sessions/route.ts`: 다른 userId의 세션 덮어쓰기 방지 → 409 Conflict 응답
+- `SaveButton.tsx`: google-login 상태에서 "로그인 중..." 텍스트 표시
+
 ## [0.2.3.0] - 2026-04-12
 
 ### Added
