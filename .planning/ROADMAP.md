@@ -48,7 +48,13 @@ Plans:
   3. 법령과 판례 항목에 출처(조문 번호 + 법령명, 판례 번호 + 날짜)가 명시되고 "법제처 API 검색 결과" 라벨이 붙는다
   4. Claude 출력에 "귀하의 경우 ~입니다" 형식의 개인화된 법적 결론이 포함되지 않는다
   5. 가정폭력 관련 입력이 감지되면 분석 전에 안전 정보 브랜치(1366, 112 연결)가 먼저 표시된다
-**Plans**: TBD
+**Plans**: 5 plans
+Plans:
+- [ ] 02-01-PLAN.md — Zustand 위저드 스토어 + DV 감지 + 스트리밍 파서 TDD
+- [ ] 02-02-PLAN.md — buildUserPrompt 구조화 출력 + react-hook-form 설치
+- [ ] 02-03-PLAN.md — 위저드 UI 컴포넌트 (IntroStep, 4단계 스텝, SafetyBranch, WizardContainer)
+- [ ] 02-04-PLAN.md — 스트리밍 결과 UI (useAnalysisStream, ResultsContainer, 섹션 컴포넌트, SourceBadge)
+- [ ] 02-05-PLAN.md — 페이지 라우트 연결 (/wizard) + 랜딩 CTA + 전체 플로우 시각적 검증
 **UI hint**: yes
 
 ### Phase 3: Polish, Accessibility, PIPA Completeness
@@ -81,6 +87,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation | 0/5 | Planning complete | - |
-| 2. Wizard UI + Analysis Pipeline | 0/TBD | Not started | - |
+| 2. Wizard UI + Analysis Pipeline | 0/5 | Planning complete | - |
 | 3. Polish, Accessibility, PIPA Completeness | 0/TBD | Not started | - |
 | 4. Persistence + Save Flow | 0/TBD | Not started | - |
