@@ -1,6 +1,6 @@
 import { searchStatutes, searchPrecedents } from './koreanLawClient';
 import { claudeClient } from './claudeClient';
-import { applyFilter } from './complianceFilter';
+import { createStreamFilter } from './complianceFilter';
 import type { UserSituation } from '@/types/analysis';
 import type { Statute, Precedent } from '@/types/law';
 
@@ -71,16 +71,17 @@ export function orchestrateAnalysis(situation: UserSituation): ReadableStream<Ui
 
         const userPrompt = buildUserPrompt(situation, statutes, precedents);
 
+        const streamFilter = createStreamFilter();
         const stream = claudeClient.stream(userPrompt);
         for await (const chunk of stream) {
-          const filtered = applyFilter(chunk);
+          const filtered = streamFilter(chunk);
           if (filtered !== null) {
             controller.enqueue(encoder.encode(filtered));
           }
         }
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-        controller.enqueue(encoder.encode(`\n\n[오류가 발생했습니다: ${errorMessage}]`));
+        console.error('[orchestrateAnalysis] Error:', err);
+        controller.enqueue(encoder.encode('\n\n[일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.]'));
       } finally {
         controller.close();
       }

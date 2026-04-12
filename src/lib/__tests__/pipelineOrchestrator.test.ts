@@ -10,14 +10,15 @@ vi.mock('../claudeClient', () => ({
     stream: vi.fn(),
   },
 }));
+const mockFilterFn = vi.fn((text: string): string | null => text);
 vi.mock('../complianceFilter', () => ({
-  applyFilter: vi.fn((text: string) => text), // default: pass through
+  createStreamFilter: vi.fn(() => mockFilterFn),
 }));
 
 import { orchestrateAnalysis, buildUserPrompt } from '../pipelineOrchestrator';
 import { searchStatutes, searchPrecedents } from '../koreanLawClient';
 import { claudeClient } from '../claudeClient';
-import { applyFilter } from '../complianceFilter';
+import { createStreamFilter } from '../complianceFilter';
 import type { UserSituation } from '@/types/analysis';
 
 const mockSituation: UserSituation = {
@@ -106,15 +107,15 @@ describe('orchestrateAnalysis', () => {
     const stream = orchestrateAnalysis(mockSituation);
     await readAllChunks(stream);
 
-    expect(applyFilter).toHaveBeenCalledWith('청크1');
-    expect(applyFilter).toHaveBeenCalledWith('청크2');
+    expect(mockFilterFn).toHaveBeenCalledWith('청크1');
+    expect(mockFilterFn).toHaveBeenCalledWith('청크2');
   });
 
   it('filters out blocked chunks', async () => {
     async function* mockStream() { yield '정상 텍스트'; yield '귀하의 경우 유리합니다'; yield '법령 정보'; }
     vi.mocked(claudeClient.stream).mockReturnValue(mockStream());
-    vi.mocked(applyFilter)
-      .mockImplementation((text: string) => text.includes('귀하의 경우') ? null : text);
+    mockFilterFn
+      .mockImplementation((text: string): string | null => text.includes('귀하의 경우') ? null : text);
 
     const stream = orchestrateAnalysis(mockSituation);
     const result = await readAllChunks(stream);

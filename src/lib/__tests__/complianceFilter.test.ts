@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { applyFilter, FORBIDDEN_PATTERNS } from '../complianceFilter';
+import { applyFilter, FORBIDDEN_PATTERNS, createStreamFilter } from '../complianceFilter';
 
 describe('complianceFilter', () => {
   it('passes safe text through unchanged', () => {
@@ -39,5 +39,39 @@ describe('complianceFilter', () => {
 
   it('has at least 5 forbidden patterns', () => {
     expect(FORBIDDEN_PATTERNS.length).toBeGreaterThanOrEqual(5);
+  });
+});
+
+describe('createStreamFilter', () => {
+  it('detects pattern split across two chunks', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const filter = createStreamFilter();
+    // "귀하의 경우" split across chunks
+    const result1 = filter('텍스트 귀하의');
+    const result2 = filter(' 경우 무엇이든');
+    // At least one of the chunks should be blocked
+    expect(result1 === null || result2 === null).toBe(true);
+    warnSpy.mockRestore();
+  });
+
+  it('passes safe text through across chunks', () => {
+    const filter = createStreamFilter();
+    expect(filter('일반적인 법률')).toBe('일반적인 법률');
+    expect(filter(' 정보를 제공합니다')).toBe(' 정보를 제공합니다');
+  });
+
+  it('blocks pattern within a single chunk', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const filter = createStreamFilter();
+    expect(filter('귀하의 경우 해당됩니다')).toBeNull();
+    warnSpy.mockRestore();
+  });
+
+  it('maintains independent state per instance', () => {
+    const filter1 = createStreamFilter();
+    const filter2 = createStreamFilter();
+    filter1('귀하의');
+    // filter2 should not be affected by filter1's buffer
+    expect(filter2('안전한 텍스트입니다')).toBe('안전한 텍스트입니다');
   });
 });
