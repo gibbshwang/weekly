@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.1.0] - 2026-04-12
+
+### Added
+- AI 이혼 법률 가이드 플랫폼 Phase 1 Foundation
+- Next.js 15 프로젝트 스캐폴딩 (src/ 디렉토리, Firebase Auth/Admin, TypeScript strict)
+- 법제처 Open API 래퍼 (`koreanLawClient.ts`): 법령 검색, 판례 검색, 법령 상세 조회, rate limiting
+- Claude API 클라이언트 + 규제 준수 시스템 프롬프트 (법률 자문 금지 강제)
+- 컴플라이언스 필터 (`complianceFilter.ts`): 법적 결론/예측/금액 패턴 실시간 차단, 롤링 버퍼로 cross-chunk 우회 방지
+- 분석 파이프라인 오케스트레이터: 법제처 검색 → Claude 스트리밍 → 컴플라이언스 필터 → 클라이언트
+- `/api/analyze` Route Handler: Firebase Auth 토큰 검증, 입력 2000자 제한, 스트리밍 응답
+- DV 안전 UI: QuickExitButton (history.replaceState + 리다이렉트), EmergencyContacts (1366/112), IncognitoGuidance
+- 법률 면책 UI: DisclaimerBanner, LawyerCTA (법률구조공단/132 링크), PrivacyNotice
+- AuthProvider (Firebase Anonymous Auth context)
+- 55 tests (Vitest): API route 6, koreanLawClient 9, complianceFilter 13, claudeClient 5, pipeline 6, UI components 10
+- Warm gray (#F5F3F0) + deep teal (#1B6B5A) 디자인 시스템, Pretendard 폰트
+
+### Fixed
+- 보안 수정 6건: rolling buffer filter, Firebase auth 검증, 입력 길이 제한, 에러 메시지 일반화, html lang="ko"
+
 ## [0.3.0.0] - 2026-03-28
 
 ### Changed
