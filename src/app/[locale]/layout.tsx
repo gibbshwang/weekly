@@ -1,5 +1,10 @@
 import type { Metadata } from 'next';
 import { AuthProvider } from '@/components/AuthProvider';
+import { DisclaimerBanner } from '@/components/DisclaimerBanner';
+import { QuickExitButton } from '@/components/QuickExitButton';
+import { EmergencyContacts } from '@/components/EmergencyContacts';
+import { IncognitoGuidance } from '@/components/IncognitoGuidance';
+import { PrivacyNotice } from '@/components/PrivacyNotice';
 
 export const metadata: Metadata = {
   title: '생활 법률 안내',
@@ -17,9 +22,14 @@ export default async function LocaleLayout({
   const { locale } = await params;
   return (
     <AuthProvider>
-      <main className="min-h-screen bg-warm-gray font-[Pretendard]">
+      <QuickExitButton />
+      <DisclaimerBanner />
+      <main className="min-h-screen bg-warm-gray font-[Pretendard] pt-2">
         {children}
       </main>
+      <PrivacyNotice />
+      <EmergencyContacts />
+      <IncognitoGuidance />
     </AuthProvider>
   );
 }
