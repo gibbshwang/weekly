@@ -90,7 +90,11 @@ export function SaveButton({ sections }: SaveButtonProps) {
         disabled={status === 'saving' || status === 'google-login'}
         className="w-full py-3 border-2 border-[#1B6B5A] text-[#1B6B5A] rounded-lg font-medium min-h-[48px] hover:bg-[#F0FAF7] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        {status === 'saving' ? '저장 중...' : '결과 저장하기'}
+        {status === 'saving'
+          ? '저장 중...'
+          : status === 'google-login'
+            ? '로그인 중...'
+            : '결과 저장하기'}
       </button>
       <SaveConsentDialog
         open={status === 'consent'}

@@ -22,7 +22,15 @@ export async function POST(req: Request) {
     );
   }
 
-  const body = await req.json();
+  let body: Record<string, unknown>;
+  try {
+    body = await req.json();
+  } catch {
+    return new Response(
+      JSON.stringify({ error: '잘못된 요청 형식입니다.' }),
+      { status: 400, headers: { 'Content-Type': 'application/json' } },
+    );
+  }
   const { sessionId, wizardSituation, analysisResult, pipaConsentedAt } = body;
 
   if (!sessionId || !analysisResult) {
@@ -35,10 +43,16 @@ export async function POST(req: Request) {
   const sessionRef = adminDb.collection('sessions').doc(sessionId);
   const existing = await sessionRef.get();
 
-  if (existing.exists && existing.data()?.userId === uid) {
+  if (existing.exists) {
+    if (existing.data()?.userId === uid) {
+      return new Response(
+        JSON.stringify({ message: '이미 저장된 세션입니다.' }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    }
     return new Response(
-      JSON.stringify({ message: '이미 저장된 세션입니다.' }),
-      { status: 200, headers: { 'Content-Type': 'application/json' } },
+      JSON.stringify({ error: '세션 ID가 이미 사용 중입니다.' }),
+      { status: 409, headers: { 'Content-Type': 'application/json' } },
     );
   }
 

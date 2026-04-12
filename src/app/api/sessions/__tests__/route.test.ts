@@ -91,6 +91,19 @@ describe('POST /api/sessions', () => {
     );
   });
 
+  it('returns 409 when session exists with different userId', async () => {
+    mockVerifyIdToken.mockResolvedValue({ uid: 'user-B' } as any);
+    mockGet.mockResolvedValue({
+      exists: true,
+      data: () => ({ userId: 'user-A' }),
+    });
+
+    const req = makeRequest(validBody, 'valid-token');
+    const res = await POST(req);
+    expect(res.status).toBe(409);
+    expect(mockSet).not.toHaveBeenCalled();
+  });
+
   it('returns 200 without re-writing when session already exists with same userId', async () => {
     mockVerifyIdToken.mockResolvedValue({ uid: 'test-uid' } as any);
     mockGet.mockResolvedValue({

@@ -1,3 +1,4 @@
+import 'server-only';
 import { adminAuth, adminDb } from '@/lib/firebaseAdmin';
 
 export const runtime = 'nodejs';
