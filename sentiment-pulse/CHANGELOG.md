@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.3.0] - 2026-04-12
+
+### Added
+- AI 이혼 법률 가이드 Phase 3: Polish, Accessibility, PIPA
+- 반응형 레이아웃: 모바일 375px 최적화, 48px 터치타겟, 적응형 타이포그래피
+- WCAG AA 접근성: 시맨틱 HTML, ARIA 레이블, 키보드 네비게이션, 포커스 관리
+- PIPA 개인정보 동의 게이트: ConsentGate 컴포넌트 (체크박스 + 약관 링크)
+- 계정 데이터 삭제: `/api/account` DELETE 엔드포인트 + DeleteDataButton UI
+- QuickExitButton bfcache 대응 (pageshow 이벤트 시 store.reset())
+- `server-only` 가드: 4개 서버 모듈에 import 추가 (claudeClient, firebaseAdmin, koreanLawClient, pipelineOrchestrator)
+- 24 new tests (총 138): 반응형 6, 접근성 6, 동의 게이트 6, 계정 삭제 6
+
+### Fixed
+- Account DELETE: verifyIdToken 실패 시 500 → 401 응답 코드 수정
+- DeleteDataButton: 불필요한 중복 인증 체크 제거, 토큰 없을 때 에러 처리
+- TypeScript: DeleteDataButton의 도달 불가능한 disabled 체크 제거 (빌드 에러 수정)
+
 ## [0.2.2.0] - 2026-04-12
 
 ### Added
