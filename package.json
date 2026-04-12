@@ -37,6 +37,7 @@
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "react-hook-form": "^7.72.1",
+    "server-only": "^0.0.1",
     "typescript": "^6.0.2",
     "zod": "^4.3.6",
     "zustand": "^5.0.12"

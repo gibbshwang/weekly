@@ -48,7 +48,9 @@ describe('DELETE /api/account', () => {
       headers: { Authorization: 'Bearer invalid-token' },
     });
     const res = await DELETE(req);
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(401);
+    const body = await res.json();
+    expect(body.error).toBe('유효하지 않은 인증 토큰입니다.');
   });
 
   it('returns 500 when deleteUser fails', async () => {

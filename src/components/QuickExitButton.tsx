@@ -1,7 +1,10 @@
 'use client';
 
+import { useWizardStore } from '@/stores/wizardStore';
+
 export function QuickExitButton() {
   const handleExit = () => {
+    useWizardStore.getState().reset();
     window.history.replaceState(null, '', '/');
     sessionStorage.clear();
     window.location.replace('https://weather.naver.com');

@@ -10,8 +10,16 @@ export async function DELETE(req: Request) {
       { status: 401, headers: { 'Content-Type': 'application/json' } },
     );
   }
+  let uid: string;
   try {
-    const { uid } = await adminAuth.verifyIdToken(authHeader.slice(7));
+    ({ uid } = await adminAuth.verifyIdToken(authHeader.slice(7)));
+  } catch {
+    return new Response(
+      JSON.stringify({ error: '유효하지 않은 인증 토큰입니다.' }),
+      { status: 401, headers: { 'Content-Type': 'application/json' } },
+    );
+  }
+  try {
     await adminAuth.deleteUser(uid);
     return new Response(null, { status: 204 });
   } catch {

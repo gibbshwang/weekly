@@ -1,3 +1,4 @@
+import 'server-only';
 import { searchStatutes, searchPrecedents } from './koreanLawClient';
 import { claudeClient } from './claudeClient';
 import { createStreamFilter } from './complianceFilter';

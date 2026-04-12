@@ -14,13 +14,15 @@ export function DeleteDataButton() {
     setStatus('deleting');
     try {
       const token = await getAuth().currentUser?.getIdToken();
-      if (token) {
-        const res = await fetch('/api/account', {
-          method: 'DELETE',
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!res.ok && res.status !== 204) throw new Error('삭제 실패');
+      if (!token) {
+        setStatus('error');
+        return;
       }
+      const res = await fetch('/api/account', {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('삭제 실패');
       sessionStorage.clear();
       useWizardStore.getState().reset();
       setStatus('done');
