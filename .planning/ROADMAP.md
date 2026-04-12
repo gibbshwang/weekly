@@ -80,7 +80,11 @@ Plans:
   1. 결과 화면에 "저장하기" 옵션이 제공되고, 클릭 시 PIPA Article 23 동의 모달이 먼저 표시된다
   2. 동의 후 Google 로그인(익명 계정 linkWithCredential)으로 분석 세션이 Firestore에 저장된다
   3. 저장된 세션은 사용자가 언제든지 삭제할 수 있으며 삭제 즉시 Firestore에서 제거된다
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 04-01-PLAN.md — saveStore + POST /api/sessions + DELETE /api/account Firestore 정리 + firestore.rules
+- [ ] 04-02-PLAN.md — SaveConsentDialog + SaveButton UI + 위저드 페이지 연결 + 시각적 검증
+**UI hint**: yes
 
 ## Progress
 
@@ -92,4 +96,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | 1. Foundation | 0/5 | Planning complete | - |
 | 2. Wizard UI + Analysis Pipeline | 0/5 | Planning complete | - |
 | 3. Polish, Accessibility, PIPA Completeness | 0/2 | Planning complete | - |
-| 4. Persistence + Save Flow | 0/TBD | Not started | - |
+| 4. Persistence + Save Flow | 0/2 | Planning complete | - |
