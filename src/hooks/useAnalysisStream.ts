@@ -62,7 +62,13 @@ export function useAnalysisStream(): UseAnalysisStreamReturn {
           return;
         }
 
-        const reader = response.body!.getReader();
+        if (!response.body) {
+          setError('분석 응답을 읽을 수 없습니다.');
+          setIsStreaming(false);
+          return;
+        }
+
+        const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let buffer = '';
 
