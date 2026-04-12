@@ -66,7 +66,10 @@ Plans:
   2. 키보드 탐색만으로 위저드 전체를 완료할 수 있고, 색상 대비가 WCAG AA 기준을 충족한다
   3. 사용자가 "내 데이터 전체 삭제" 버튼 한 번으로 Firebase 익명 계정과 관련 데이터가 즉시 삭제된다
   4. 이혼 사유 또는 DV 여부 관련 입력 전에 PIPA 민감정보 동의 문구가 표시되고 동의 없이는 해당 단계로 진행되지 않는다
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 03-01-PLAN.md — 반응형·터치타겟·WCAG AA 접근성 수정 (대비, 포커스, 라벨, ARIA)
+- [ ] 03-02-PLAN.md — 전체삭제 API/버튼 + PIPA 민감정보 동의 게이트
 **UI hint**: yes
 
 ### Phase 4: Persistence + Save Flow
@@ -88,5 +91,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 |-------|----------------|--------|-----------|
 | 1. Foundation | 0/5 | Planning complete | - |
 | 2. Wizard UI + Analysis Pipeline | 0/5 | Planning complete | - |
-| 3. Polish, Accessibility, PIPA Completeness | 0/TBD | Not started | - |
+| 3. Polish, Accessibility, PIPA Completeness | 0/2 | Planning complete | - |
 | 4. Persistence + Save Flow | 0/TBD | Not started | - |
