@@ -61,6 +61,45 @@ describe('buildUserPrompt', () => {
     expect(prompt).toContain('2023다12345');
   });
 
+  it('includes "## 쟁점 체크리스트" section header', () => {
+    const prompt = buildUserPrompt(mockSituation, [], []);
+    expect(prompt).toContain('## 쟁점 체크리스트');
+  });
+
+  it('includes "## 관련 법령" section header', () => {
+    const prompt = buildUserPrompt(mockSituation, [], []);
+    expect(prompt).toContain('## 관련 법령');
+  });
+
+  it('includes "## 관련 판례" section header', () => {
+    const prompt = buildUserPrompt(mockSituation, [], []);
+    expect(prompt).toContain('## 관련 판례');
+  });
+
+  it('includes "## 변호사에게 물어볼 질문" section header', () => {
+    const prompt = buildUserPrompt(mockSituation, [], []);
+    expect(prompt).toContain('## 변호사에게 물어볼 질문');
+  });
+
+  it('includes format instruction to keep section headers', () => {
+    const prompt = buildUserPrompt(mockSituation, [], []);
+    expect(prompt).toContain('섹션 헤더는 변경하지 마세요');
+  });
+
+  it('includes instruction to cite only from law API results', () => {
+    const prompt = buildUserPrompt(mockSituation, [], []);
+    expect(prompt).toContain('법제처 검색 결과에서만 인용');
+  });
+
+  it('includes statute data in prompt when provided', () => {
+    const statutes = [{ name: '민법', mst: '001', category: '법률', effectiveDate: '2024-01-01' }];
+    const precedents = [{ caseNumber: '2023다12345', date: '2023-06-15', summary: '이혼 판결', ruling: '이혼 인용', precSeq: '1' }];
+    const prompt = buildUserPrompt(mockSituation, statutes, precedents);
+    expect(prompt).toContain('법제처 API 검색 결과');
+    expect(prompt).toContain('민법');
+    expect(prompt).toContain('2023다12345');
+  });
+
   it('handles situation without optional fields', () => {
     const minimal: UserSituation = {
       marriageDuration: '3년',

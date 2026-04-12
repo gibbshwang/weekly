@@ -28,6 +28,7 @@
   "homepage": "https://github.com/gibbshwang/sentiment-pulse#readme",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.88.0",
+    "@hookform/resolvers": "^5.2.2",
     "fast-xml-parser": "^5.5.11",
     "firebase": "^12.12.0",
     "firebase-admin": "^13.8.0",
@@ -35,6 +36,7 @@
     "next-intl": "^4.9.1",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
+    "react-hook-form": "^7.72.1",
     "typescript": "^6.0.2",
     "zod": "^4.3.6",
     "zustand": "^5.0.12"
