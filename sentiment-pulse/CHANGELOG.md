@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.2.0] - 2026-04-12
+
+### Added
+- AI 이혼 법률 가이드 Phase 2: Wizard UI + Analysis Pipeline
+- 위저드 입력 시스템: WizardContainer, IntroStep, DivorceReasonStep, ChildrenStep, AssetStep, MarriageDurationStep, SafetyBranch, WizardProgress
+- Zustand 위저드 스토어 (`wizardStore.ts`): 다단계 입력 상태 관리
+- 스트리밍 분석 결과 UI: ResultsContainer, IssueChecklist, LawyerQuestions, PrecedentSection, StatuteSection, SourceBadge
+- `useAnalysisStream` 훅: `/api/analyze` SSE 스트리밍 연결 + 파싱
+- `parseAnalysisStream.ts`: 스트리밍 응답 파서 (issues, statutes, precedents, questions 섹션)
+- `dvDetector.ts`: 가정폭력 키워드 감지기 (SafetyBranch 분기용)
+- `pipelineOrchestrator.ts`: 법제처 검색 → Claude 분석 전체 파이프라인
+- `/wizard` 페이지 라우트 + 랜딩 페이지 CTA 연결
+- next-intl i18n 라우팅 (`/ko/...`, `/en/...`)
+- 59 new tests (총 114): wizardStore 7, parseAnalysisStream 6, dvDetector 4, pipelineOrchestrator 8, useAnalysisStream 7, WizardContainer 3, IntroStep 2, DivorceReasonStep 3, ResultsContainer 6, SourceBadge 1, StatuteSection 2, PrecedentSection 2, WizardPage 4, API route 4
+
+### Fixed
+- `useAnalysisStream`: response.body null guard 추가 (SSE 안전성)
+
 ## [0.2.1.0] - 2026-04-12
 
 ### Added
