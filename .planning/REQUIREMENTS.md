@@ -106,13 +106,50 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| (Populated by roadmapper) | | |
+| INFRA-01 | Phase 1 | Pending |
+| INFRA-02 | Phase 1 | Pending |
+| INFRA-03 | Phase 1 | Pending |
+| AUTH-01 | Phase 1 | Pending |
+| COMPL-01 | Phase 1 | Pending |
+| COMPL-02 | Phase 1 | Pending |
+| COMPL-03 | Phase 1 | Pending |
+| COMPL-04 | Phase 1 | Pending |
+| SAFE-01 | Phase 1 | Pending |
+| SAFE-02 | Phase 1 | Pending |
+| SAFE-03 | Phase 1 | Pending |
+| SAFE-05 | Phase 1 | Pending |
+| PRIV-01 | Phase 1 | Pending |
+| PRIV-02 | Phase 1 | Pending |
+| PRIV-04 | Phase 1 | Pending |
+| INTAKE-01 | Phase 2 | Pending |
+| INTAKE-02 | Phase 2 | Pending |
+| INTAKE-03 | Phase 2 | Pending |
+| INTAKE-04 | Phase 2 | Pending |
+| ANALYSIS-01 | Phase 2 | Pending |
+| ANALYSIS-02 | Phase 2 | Pending |
+| ANALYSIS-03 | Phase 2 | Pending |
+| ANALYSIS-04 | Phase 2 | Pending |
+| ANALYSIS-05 | Phase 2 | Pending |
+| ANALYSIS-06 | Phase 2 | Pending |
+| LEGAL-01 | Phase 2 | Pending |
+| LEGAL-02 | Phase 2 | Pending |
+| LEGAL-03 | Phase 2 | Pending |
+| LEGAL-04 | Phase 2 | Pending |
+| SAFE-04 | Phase 2 | Pending |
+| UI-01 | Phase 3 | Pending |
+| UI-02 | Phase 3 | Pending |
+| UI-03 | Phase 3 | Pending |
+| UI-04 | Phase 3 | Pending |
+| UI-05 | Phase 3 | Pending |
+| PRIV-03 | Phase 3 | Pending |
+| PRIV-05 | Phase 3 | Pending |
+| AUTH-02 | Phase 4 | Pending |
 
 **Coverage:**
-- v1 requirements: 30 total
-- Mapped to phases: 0
-- Unmapped: 30 ⚠️
+- v1 requirements: 38 total
+- Mapped to phases: 38
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-04-12*
-*Last updated: 2026-04-12 after research synthesis*
+*Last updated: 2026-04-12 — traceability populated by roadmapper (38 requirements across 4 phases)*
