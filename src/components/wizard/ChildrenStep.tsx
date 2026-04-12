@@ -67,10 +67,11 @@ export function ChildrenStep({ onNext, onBack }: ChildrenStepProps) {
 
         {hasChildren && (
           <div className="mb-6">
-            <label className="block text-sm text-gray-600 mb-2">
+            <label htmlFor="childrenInfo" className="block text-sm text-gray-600 mb-2">
               자녀 나이와 현재 양육 상황을 알려주세요
             </label>
             <textarea
+              id="childrenInfo"
               {...register('childrenInfo')}
               placeholder="예: 초등학생 2명, 현재 제가 양육 중"
               className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base min-h-[80px] resize-none focus:outline-none focus:ring-2 focus:ring-[#1B6B5A]"

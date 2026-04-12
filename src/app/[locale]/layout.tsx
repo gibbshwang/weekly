@@ -5,6 +5,7 @@ import { QuickExitButton } from '@/components/QuickExitButton';
 import { EmergencyContacts } from '@/components/EmergencyContacts';
 import { IncognitoGuidance } from '@/components/IncognitoGuidance';
 import { PrivacyNotice } from '@/components/PrivacyNotice';
+import { DeleteDataButton } from '@/components/DeleteDataButton';
 
 export const metadata: Metadata = {
   title: '생활 법률 안내',
@@ -28,6 +29,7 @@ export default async function LocaleLayout({
         {children}
       </main>
       <PrivacyNotice />
+      <DeleteDataButton />
       <EmergencyContacts />
       <IncognitoGuidance />
     </AuthProvider>

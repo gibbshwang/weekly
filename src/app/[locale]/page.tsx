@@ -20,7 +20,7 @@ export default function HomePage() {
         >
           무료로 시작하기
         </Link>
-        <p className="mt-8 text-xs text-gray-500">
+        <p className="mt-8 text-xs text-gray-600">
           법률 정보 제공 서비스이며, 법률 자문이 아닙니다.
         </p>
       </div>

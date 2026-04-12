@@ -54,7 +54,8 @@ export function DivorceReasonStep({ onNext, onBack }: DivorceReasonStepProps) {
             key={option}
             type="button"
             onClick={() => handleQuickOption(option)}
-            className="px-3 py-2 text-sm border border-gray-300 rounded-full text-gray-700 hover:border-[#1B6B5A] hover:text-[#1B6B5A] min-h-[36px]"
+            aria-label={`이혼 사유 추가: ${option}`}
+            className="px-3 py-3 text-sm border border-gray-300 rounded-full text-gray-700 hover:border-[#1B6B5A] hover:text-[#1B6B5A] min-h-[48px]"
           >
             {option}
           </button>
