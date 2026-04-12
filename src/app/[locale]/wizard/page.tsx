@@ -5,6 +5,7 @@ import { WizardContainer } from '@/components/wizard/WizardContainer';
 import { ResultsContainer } from '@/components/results/ResultsContainer';
 import { useAnalysisStream } from '@/hooks/useAnalysisStream';
 import { useWizardStore } from '@/stores/wizardStore';
+import { SaveButton } from '@/components/results/SaveButton';
 import type { UserSituation } from '@/types/analysis';
 
 export default function WizardPage() {
@@ -38,10 +39,11 @@ export default function WizardPage() {
         error={error}
       />
       {!isStreaming && (
-        <div className="max-w-lg mx-auto px-4 pb-8">
+        <div className="max-w-lg mx-auto px-4 pb-8 space-y-3">
+          <SaveButton sections={sections} />
           <button
             onClick={handleRestart}
-            className="w-full py-3 border border-[#1B6B5A] text-[#1B6B5A] rounded-lg font-medium min-h-[48px] hover:bg-[#F0FAF7] transition-colors"
+            className="w-full py-3 border border-gray-300 text-gray-600 rounded-lg font-medium min-h-[48px] hover:bg-gray-50 transition-colors"
           >
             다시 시작하기
           </button>
