@@ -40,7 +40,7 @@ export function DeleteDataButton() {
       {status === 'confirming' ? (
         <div className="flex items-center justify-center gap-2">
           <span className="text-xs text-gray-700">정말 삭제하시겠습니까?</span>
-          <button onClick={handleConfirm} disabled={status === 'deleting'}
+          <button onClick={handleConfirm}
             className="text-xs text-red-600 underline min-h-[48px] px-2">
             삭제
           </button>
