@@ -29,7 +29,13 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. 화면 우상단에 긴급 탈출 버튼이 존재하고, 클릭 시 history.replaceState + sessionStorage.clear 후 중립 사이트로 이동한다
   4. 페이지 타이틀과 메타태그에 "이혼" 또는 법률 관련 단어가 포함되지 않는다 (중립 표현 사용)
   5. 서비스를 로그인 없이 사용할 수 있으며 위저드 데이터가 서버에 자동 저장되지 않는다
-**Plans**: TBD
+**Plans**: 5 plans
+Plans:
+- [ ] 01-01-PLAN.md — Next.js 15 스캐폴딩 + Firebase 익명인증 + 테스트 인프라 + 공유 타입
+- [ ] 01-02-PLAN.md — 법제처 Open API 래퍼 TDD (XML→JSON)
+- [ ] 01-03-PLAN.md — Safety/Compliance UI 컴포넌트 (면책고지, 탈출버튼, 긴급연락처)
+- [ ] 01-04-PLAN.md — Claude 클라이언트 + 변호사법 준수 후처리 필터 TDD
+- [ ] 01-05-PLAN.md — 분석 파이프라인 오케스트레이터 + POST /api/analyze 엔드포인트
 **UI hint**: yes
 
 ### Phase 2: Wizard UI + Analysis Pipeline
@@ -74,7 +80,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation | 0/TBD | Not started | - |
+| 1. Foundation | 0/5 | Planning complete | - |
 | 2. Wizard UI + Analysis Pipeline | 0/TBD | Not started | - |
 | 3. Polish, Accessibility, PIPA Completeness | 0/TBD | Not started | - |
 | 4. Persistence + Save Flow | 0/TBD | Not started | - |
