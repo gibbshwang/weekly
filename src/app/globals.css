@@ -1,0 +1,8 @@
+@import "tailwindcss";
+
+@theme {
+  --color-warm-gray: #F5F3F0;
+  --color-deep-teal: #1B6B5A;
+  --color-deep-teal-dark: #155A4A;
+  --font-family-pretendard: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+}
