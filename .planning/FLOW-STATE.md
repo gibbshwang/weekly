@@ -1,9 +1,9 @@
-# Flow State: /udd 스킬 구현 — 🎉 ALL WAVES COMPLETE (v0.1.0 ready)
+# Flow State: /udd 스킬 구현 — 🎉 ALL WAVES COMPLETE (v0.1.0 + post-release hardening)
 
 **Project:** AX Universal Data Downloader (`/udd`) harness skill
 **Track:** A (Subagent-Driven Development) — COMPLETED
-**Updated:** 2026-04-25
-**Status:** Ready for install & user smoke-test
+**Updated:** 2026-04-25 (post-release cleanup pass)
+**Status:** Ready for install & user smoke-test (60 tests, all green)
 
 ## Parallel Track
 **jip-giljabi (별도 프로젝트):** Phase 5 Wave 1~3 완료, 코드리뷰+verifier 대기 중. 해당 프로젝트 디렉토리(`../jip-giljabi`)의 FLOW-STATE 참조.
@@ -11,8 +11,8 @@
 ## Final Position (/udd)
 
 - 브랜치: `feat/udd-implementation` (worktree: `.worktrees/udd-impl`)
-- 태그: `v0.1.0`, `wave-1-complete` ~ `wave-6-complete` (7개)
-- 테스트: **56 passed, 1 skipped** (E2E fake-server, manual)
+- 태그: `v0.1.0`, `wave-1-complete` ~ `wave-6-complete` (7개). v0.1.0 이후 fix-up 6 commits.
+- 테스트: **60 passed, 1 skipped** (E2E fake-server, manual) — v0.1.0의 56개 + 4개 신규
 - 총 40 tasks (플랜의 전체 범위) 구현 완료
 - 스펙: `docs/superpowers/specs/2026-04-24-ax-udd-design.md`
 - 플랜: `docs/superpowers/plans/2026-04-24-ax-udd-implementation.md`
@@ -82,15 +82,15 @@ git worktree list                                # worktree 확인
 
 Plan Section 16 Open Questions + Review에서 제기된 minor items:
 
-1. Plan의 CLI 감지 env var 이름 (`CLAUDE_CODE_VERSION`) vs 실제 Claude Code가 세팅하는 `CLAUDECODE=1` 불일치
-2. `precheck.py:8` 불필요 `shutil` import, `test_precheck.py:1-2` 불필요 imports
-3. `_SELECTORS_CACHE` invalidation after heal save (현재 in-process 캐시 stale)
-4. `_ask_anthropic` tool_use 블록 방어 부족
-5. `notify.py.tmpl` 이모지 하드코딩 (CLAUDE.md 정책 고려)
-6. Fix-up 결과 문서에도 반영 필요 (plan 자체의 `{{/}}` 오타)
-7. Windows cp949 → `PYTHONIOENCODING=utf-8` 기본 처리
+1. ~~Plan의 CLI 감지 env var 이름~~ → **FIXED** (e9f4ecc): CLAUDECODE 우선 탐지, CLAUDE_CODE_VERSION / CLAUDE_SESSION_ID fallback.
+2. ~~`precheck.py:8` + `test_precheck.py:1-2` 불필요 imports~~ → **FIXED** (1026dc4): shutil, json, MagicMock 제거.
+3. ~~`_SELECTORS_CACHE` invalidation~~ → **FIXED** (d2b3101): save_selectors가 캐시도 리프레시.
+4. ~~`_ask_anthropic` tool_use 블록 방어~~ → **FIXED** (d2efed5): `_extract_anthropic_text()` 헬퍼가 text 블록만 필터링, 없으면 명확한 RuntimeError.
+5. `notify.py.tmpl` 이모지 하드코딩 (CLAUDE.md 정책 고려) — **SKIP**: 이모지가 Telegram 상태 인디케이터로 기능함. 제품 디자인 결정이므로 사용자 판단 필요.
+6. ~~Fix-up 결과 문서에도 반영 필요 (plan 자체의 `{{/}}` 오타)~~ → **FIXED** (904767c): 플랜 문서의 PROMPT_TEMPLATE 단일 중괄호로 수정.
+7. ~~Windows cp949 → `PYTHONIOENCODING=utf-8`~~ → **FIXED** (66c56d6 + platform_detect.ensure_utf8_stdio): run.py.tmpl + cli.py.tmpl 모듈 상단 stdout/stderr reconfigure + cli의 _subprocess_env()가 자식 프로세스에 PYTHONIOENCODING=utf-8 전달.
 
-이 이슈들은 모두 non-blocking으로 현재 v0.1.0은 기능 완전.
+6/7개 fix 완료. 남은 #5 (이모지)는 제품 결정 대기 — 사용자 피드백 후 진행.
 
 ## 텔레그램
 chat_id: 216072370 (현재 MCP disconnected, 복구 시 재개)
