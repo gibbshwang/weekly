@@ -29,3 +29,7 @@ npm-debug.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+.gstack/
+
+# Worktrees (isolated workspaces for parallel work)
+.worktrees/
