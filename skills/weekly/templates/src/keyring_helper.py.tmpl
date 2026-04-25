@@ -1,0 +1,27 @@
+"""OS keyring wrapper — store SMTP password and AI API key per department.
+
+Service name convention: `weekly-<dept>` (full department name).
+Usernames: `smtp_password`, `ai_api_key` (and others as needed).
+"""
+import keyring
+
+
+def set_secret(service: str, username: str, value: str) -> None:
+    """Store a secret in the OS keyring."""
+    keyring.set_password(service, username, value)
+
+
+def get_secret(service: str, username: str) -> str:
+    """Retrieve a secret. Raises KeyError if missing."""
+    val = keyring.get_password(service, username)
+    if val is None:
+        raise KeyError(f"Secret {service}/{username} not found in keyring")
+    return val
+
+
+def delete_secret(service: str, username: str) -> None:
+    """Remove a secret. Idempotent — no error if already missing."""
+    try:
+        keyring.delete_password(service, username)
+    except keyring.errors.PasswordDeleteError:
+        pass
