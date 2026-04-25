@@ -1,0 +1,66 @@
+"""Status command — report each part's writing progress.
+
+Used by `wreport status` (Phase 1 task 6.1).
+"""
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List
+
+
+_MARKERS = {"written": "✓", "empty": "○", "missing": "✗"}
+
+
+def compute_status(md_dir: Path, parts: List[str]) -> List[Dict[str, Any]]:
+    """Return per-part status records.
+
+    For each part:
+      - status: "written" | "empty" | "missing"
+      - lines: number of lines (or zero if missing/empty)
+      - mtime: ISO 8601 string or None
+
+    Args:
+        md_dir: Directory containing .md files (one per part).
+        parts: List of part names (e.g. ["전략기획", "사업개발"]).
+
+    Returns:
+        List of dicts with keys: part, status, lines, mtime.
+    """
+    md_dir = Path(md_dir)
+    out: List[Dict[str, Any]] = []
+    for part in parts:
+        path = md_dir / f"{part}.md"
+        if not path.exists():
+            out.append({"part": part, "status": "missing", "lines": 0, "mtime": None})
+            continue
+        text = path.read_text(encoding="utf-8")
+        mtime = datetime.fromtimestamp(path.stat().st_mtime).isoformat(timespec="seconds")
+        if not text.strip():
+            out.append({"part": part, "status": "empty", "lines": 0, "mtime": mtime})
+            continue
+        line_count = text.count("\n") + (0 if text.endswith("\n") else 1)
+        out.append({"part": part, "status": "written", "lines": line_count, "mtime": mtime})
+    return out
+
+
+def format_status_report(statuses: List[Dict[str, Any]], week: str, dept_name: str) -> str:
+    """Human-readable progress report.
+
+    Args:
+        statuses: List of status dicts from compute_status().
+        week: Week identifier (e.g. "2026-W18").
+        dept_name: Department name (e.g. "기획팀").
+
+    Returns:
+        Formatted text report with trailing newline.
+    """
+    lines = [f"=== {dept_name} 작성 진척 — {week} ===", ""]
+    for s in statuses:
+        marker = _MARKERS.get(s["status"], "?")
+        if s["status"] == "written":
+            suffix = f"  ({s['lines']} lines, {s['mtime']})"
+        elif s["status"] == "empty":
+            suffix = "  (파일은 있지만 비어있음)"
+        else:  # missing
+            suffix = "  미작성"
+        lines.append(f"  {marker} {s['part']}{suffix}")
+    return "\n".join(lines) + "\n"
