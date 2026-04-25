@@ -1,0 +1,141 @@
+"""Cross-platform scheduler primitives for /weekly cron tasks.
+
+Windows: `schtasks.exe` (Task Scheduler)
+Unix: `crontab` (POSIX cron)
+
+Cron strings follow standard 5-field syntax. On Windows we translate to
+`/SC` flags via a small heuristic; complex cron strings fall back to
+`/SC HOURLY` (with a default behavior the operator can correct via
+schtasks GUI if needed).
+"""
+import re
+import subprocess
+import sys
+from typing import List
+
+
+_MARKER_PREFIX = "# weekly-managed:"
+
+
+def install_task(name: str, cron: str, command: str, working_dir: str) -> None:
+    """Register a scheduled task. Idempotent (uninstall then install)."""
+    if sys.platform == "win32":
+        _install_windows(name, cron, command, working_dir)
+    else:
+        _install_unix(name, cron, command, working_dir)
+
+
+def uninstall_task(name: str) -> None:
+    """Remove the named task. No error if the task does not exist."""
+    if sys.platform == "win32":
+        _uninstall_windows(name)
+    else:
+        _uninstall_unix(name)
+
+
+def list_tasks(prefix: str = "weekly-") -> List[str]:
+    if sys.platform == "win32":
+        return _list_windows(prefix)
+    return _list_unix(prefix)
+
+
+# --- Windows (schtasks) ---
+
+def _windows_schedule_flags(cron: str) -> List[str]:
+    cron = cron.strip()
+    if cron == "0 * * * *":
+        return ["/SC", "HOURLY"]
+    m = re.fullmatch(r"(\d+) (\d+) \* \* (\d)", cron)
+    if m:
+        minute, hour, dow = m.groups()
+        days = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"]
+        return ["/SC", "WEEKLY", "/D", days[int(dow)],
+                "/ST", f"{int(hour):02d}:{int(minute):02d}"]
+    return ["/SC", "HOURLY"]
+
+
+def _install_windows(name: str, cron: str, command: str, working_dir: str) -> None:
+    cmd = [
+        "schtasks", "/Create", "/TN", name, "/F",
+        "/TR", f'cmd /c cd /d "{working_dir}" && {command}',
+    ]
+    cmd += _windows_schedule_flags(cron)
+    res = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8")
+    if res.returncode != 0:
+        raise RuntimeError(f"schtasks /Create failed: {res.stderr}")
+
+
+def _uninstall_windows(name: str) -> None:
+    # Note: /Delete on a non-existent task returns nonzero, but from the
+    # caller's perspective "task is gone" is the desired postcondition,
+    # so we intentionally do not raise on failure.
+    subprocess.run(
+        ["schtasks", "/Delete", "/TN", name, "/F"],
+        capture_output=True, text=True, encoding="utf-8",
+    )
+
+
+def _list_windows(prefix: str) -> List[str]:
+    res = subprocess.run(
+        ["schtasks", "/Query", "/FO", "CSV"],
+        capture_output=True, text=True, encoding="utf-8",
+    )
+    out = []
+    for line in res.stdout.splitlines()[1:]:
+        if not line.startswith('"'):
+            continue
+        name = line.split('"')[1].lstrip("\\")
+        if name.startswith(prefix):
+            out.append(name)
+    return out
+
+
+# --- Unix (cron) ---
+
+def _read_crontab() -> str:
+    res = subprocess.run(["crontab", "-l"], capture_output=True, text=True)
+    return res.stdout if res.returncode == 0 else ""
+
+
+def _strip_managed_entry(crontab: str, name: str) -> List[str]:
+    """Return crontab lines with the named entry (and its cron line) removed."""
+    out = []
+    skip_next = False
+    marker = f"{_MARKER_PREFIX} {name}"
+    for line in crontab.splitlines():
+        if skip_next:
+            skip_next = False
+            continue
+        if line.strip() == marker:
+            skip_next = True
+            continue
+        out.append(line)
+    return out
+
+
+def _write_crontab(content: str) -> None:
+    subprocess.run(["crontab", "-"], input=content, text=True, capture_output=True)
+
+
+def _install_unix(name: str, cron: str, command: str, working_dir: str) -> None:
+    existing = _read_crontab()
+    cleaned = _strip_managed_entry(existing, name)
+    cleaned.append(f"{_MARKER_PREFIX} {name}")
+    cleaned.append(f"{cron} cd {working_dir} && {command}")
+    _write_crontab("\n".join(cleaned) + "\n")
+
+
+def _uninstall_unix(name: str) -> None:
+    existing = _read_crontab()
+    cleaned = _strip_managed_entry(existing, name)
+    _write_crontab("\n".join(cleaned) + "\n")
+
+
+def _list_unix(prefix: str) -> List[str]:
+    out = []
+    for line in _read_crontab().splitlines():
+        if line.startswith(_MARKER_PREFIX):
+            name = line.split(_MARKER_PREFIX, 1)[1].strip()
+            if name.startswith(prefix):
+                out.append(name)
+    return out
