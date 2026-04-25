@@ -1,0 +1,23 @@
+"""JSON Lines audit logger.
+
+Records distribution/compile/mail events for traceability (PRD F-10).
+File path is `<storage>/<dept>/logs/audit.jsonl`. The compiler/assigner
+calls `log_event` after each major action.
+"""
+import json
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+
+def log_event(log_path: Path, event: str, **fields: Any) -> None:
+    """Append one JSON line with auto-stamped `ts` (ISO 8601, tz-aware)."""
+    log_path = Path(log_path)
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    record = {
+        "ts": datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds"),
+        "event": event,
+        **fields,
+    }
+    with log_path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(record, ensure_ascii=False) + "\n")
