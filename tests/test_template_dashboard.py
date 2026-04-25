@@ -74,3 +74,90 @@ def test_render_includes_warnings(tmp_path: Path):
     )
     assert "민감정보 가능성 발견" in html
     assert "주의사항" in html
+
+
+def test_dashboard_has_pretendard_font_stack(tmp_path: Path):
+    """Per CLAUDE.md typography constraint."""
+    dashboard = _load_dashboard(tmp_path)
+    result = {
+        "부서_종합_요약": "x", "파트별_핵심": {}, "진척률": {},
+        "미작성_파트": [], "주의사항": [],
+    }
+    html = dashboard.render_dashboard(
+        result=result, dept_name="기획팀", week="2026-W18",
+        template_path=PROJECT_ROOT / "skills/weekly/templates/template_dashboard.html.j2",
+    )
+    # System font stack with Pretendard primary + Korean fallback
+    assert "Pretendard" in html
+    assert "Apple SD Gothic Neo" in html or "Malgun Gothic" in html
+
+
+def test_dashboard_uses_design_palette(tmp_path: Path):
+    """Warm gray bg + deep teal accent (CLAUDE.md design tokens)."""
+    dashboard = _load_dashboard(tmp_path)
+    result = {
+        "부서_종합_요약": "x", "파트별_핵심": {}, "진척률": {},
+        "미작성_파트": [], "주의사항": [],
+    }
+    html = dashboard.render_dashboard(
+        result=result, dept_name="기획팀", week="2026-W18",
+        template_path=PROJECT_ROOT / "skills/weekly/templates/template_dashboard.html.j2",
+    )
+    assert "#F5F3F0" in html  # warm gray
+    assert "#1B6B5A" in html  # deep teal
+    # No purple
+    assert "purple" not in html.lower()
+    assert "#7C3AED" not in html
+    assert "#A855F7" not in html
+
+
+def test_dashboard_has_print_styles(tmp_path: Path):
+    """Print-friendly per design constraint."""
+    dashboard = _load_dashboard(tmp_path)
+    result = {
+        "부서_종합_요약": "x", "파트별_핵심": {}, "진척률": {},
+        "미작성_파트": [], "주의사항": [],
+    }
+    html = dashboard.render_dashboard(
+        result=result, dept_name="기획팀", week="2026-W18",
+        template_path=PROJECT_ROOT / "skills/weekly/templates/template_dashboard.html.j2",
+    )
+    assert "@media print" in html
+
+
+def test_dashboard_uses_semantic_html(tmp_path: Path):
+    """Semantic HTML5 for accessibility."""
+    dashboard = _load_dashboard(tmp_path)
+    result = {
+        "부서_종합_요약": "x",
+        "파트별_핵심": {"전략기획": {"주요_성과": [], "주요_이슈": [], "차주_계획": [], "리스크": []}},
+        "진척률": {"전략기획": 50},
+        "미작성_파트": [], "주의사항": [],
+    }
+    html = dashboard.render_dashboard(
+        result=result, dept_name="기획팀", week="2026-W18",
+        template_path=PROJECT_ROOT / "skills/weekly/templates/template_dashboard.html.j2",
+    )
+    assert "<header" in html or "<main" in html
+    # Progress bar should have ARIA label or role
+    assert 'role="progressbar"' in html or "aria-" in html
+
+
+def test_dashboard_no_external_resources(tmp_path: Path):
+    """PRD §6: 'CDN 미사용', email-safe — no external links/CDN/scripts."""
+    dashboard = _load_dashboard(tmp_path)
+    result = {
+        "부서_종합_요약": "x", "파트별_핵심": {}, "진척률": {},
+        "미작성_파트": [], "주의사항": [],
+    }
+    html = dashboard.render_dashboard(
+        result=result, dept_name="기획팀", week="2026-W18",
+        template_path=PROJECT_ROOT / "skills/weekly/templates/template_dashboard.html.j2",
+    )
+    # No CDN imports
+    import re
+    for tag in re.findall(r'<(?:link|script|img)[^>]+>', html):
+        # Allow inline style/script with no src/href, allow data: URLs
+        if "src=" in tag or "href=" in tag:
+            # Must be relative/anchor only, not http/https/cdn
+            assert not re.search(r'(?:src|href)="(?:https?://|//cdn)', tag), f"External resource: {tag}"

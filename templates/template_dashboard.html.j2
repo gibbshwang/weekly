@@ -1,73 +1,260 @@
-{# Phase 0 placeholder dashboard. /design-consultation will replace later. #}
+{# /weekly Phase 1 dashboard. Production design per CLAUDE.md tokens.
+   Constraints: no CDN, email-safe (all CSS inline), Korean-first,
+   print-friendly, WCAG AA. #}
 <!DOCTYPE html>
 <html lang="ko">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>{{ dept_name }} 주간보고 — {{ week }}</title>
 <style>
-  body { font-family: "Pretendard", sans-serif; max-width: 920px; margin: 2em auto; padding: 0 1em; color: #333; }
-  h1 { color: #1B6B5A; border-bottom: 2px solid #1B6B5A; padding-bottom: 0.4em; }
-  h2 { color: #1B6B5A; margin-top: 2em; }
-  .summary { background: #F5F3F0; padding: 1em; border-radius: 8px; }
-  table { width: 100%; border-collapse: collapse; margin-top: 1em; }
-  th, td { border: 1px solid #ddd; padding: 0.6em; text-align: left; vertical-align: top; }
-  th { background: #F5F3F0; }
-  .missing { color: #c00; font-weight: bold; }
-  .progress-bar { background: #eee; height: 14px; border-radius: 7px; overflow: hidden; }
-  .progress-fill { background: #1B6B5A; height: 100%; }
-  .footnote { color: #888; font-size: 0.85em; margin-top: 3em; }
+  /* ---- Design tokens ---- */
+  :root {
+    --bg: #F5F3F0;        /* warm gray (background) */
+    --surface: #FFFFFF;   /* card surface */
+    --primary: #1B6B5A;   /* deep teal */
+    --primary-soft: #E6F0EE;
+    --text: #1F2937;      /* slate-800, AA on warm gray */
+    --muted: #6B7280;     /* slate-500 */
+    --border: #E5E7EB;
+    --warn: #D97706;      /* amber-600 (empty) */
+    --danger: #B91C1C;    /* red-700 (missing) */
+    --radius: 8px;
+    --shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+  }
+  /* ---- Reset + base ---- */
+  *, *::before, *::after { box-sizing: border-box; }
+  html { font-size: 16px; }
+  body {
+    margin: 0;
+    font-family: "Pretendard", -apple-system, BlinkMacSystemFont, "Segoe UI",
+                 "Apple SD Gothic Neo", "Malgun Gothic", "Helvetica Neue", sans-serif;
+    line-height: 1.6;
+    color: var(--text);
+    background: var(--bg);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  main {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 2rem 1.25rem 4rem;
+  }
+  /* ---- Header ---- */
+  header.report-header {
+    border-bottom: 2px solid var(--primary);
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.75rem;
+  }
+  header.report-header .eyebrow {
+    color: var(--muted);
+    font-size: 0.85rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    margin: 0 0 0.25rem;
+  }
+  header.report-header h1 {
+    color: var(--primary);
+    font-size: 1.75rem;
+    margin: 0;
+    font-weight: 700;
+    line-height: 1.3;
+  }
+  /* ---- Section + headings ---- */
+  section { margin-top: 2rem; }
+  section > h2 {
+    color: var(--primary);
+    font-size: 1.25rem;
+    margin: 0 0 0.75rem;
+    font-weight: 600;
+  }
+  section > h3 {
+    font-size: 1.05rem;
+    margin: 1.5rem 0 0.5rem;
+    color: var(--text);
+    font-weight: 600;
+  }
+  /* ---- Summary card ---- */
+  .summary {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--primary);
+    padding: 1rem 1.25rem;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+  }
+  .summary strong { color: var(--primary); display: block; margin-bottom: 0.5rem; }
+  /* ---- Missing parts notice ---- */
+  .missing-notice {
+    color: var(--danger);
+    font-weight: 600;
+    background: #FEE2E2;
+    border-left: 4px solid var(--danger);
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius);
+    margin-top: 1rem;
+  }
+  /* ---- Tables ---- */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin-top: 0.75rem;
+  }
+  th, td {
+    padding: 0.75rem 1rem;
+    text-align: left;
+    vertical-align: top;
+    border-bottom: 1px solid var(--border);
+  }
+  tr:last-child th, tr:last-child td { border-bottom: 0; }
+  th {
+    background: var(--primary-soft);
+    font-weight: 600;
+    color: var(--primary);
+    width: 8.5rem;
+  }
+  td ul { margin: 0; padding-left: 1.1rem; }
+  td li { margin-bottom: 0.25rem; }
+  /* ---- Progress table ---- */
+  .progress-table th { width: auto; }
+  .progress-bar {
+    background: var(--border);
+    height: 0.625rem;
+    border-radius: 999px;
+    overflow: hidden;
+    width: 100%;
+    min-width: 8rem;
+  }
+  .progress-fill {
+    background: var(--primary);
+    height: 100%;
+    transition: width 0.3s ease;
+  }
+  .pct {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    color: var(--primary);
+    width: 3.5rem;
+    text-align: right;
+  }
+  /* ---- Warnings list ---- */
+  .warnings {
+    background: #FEF3C7;
+    border-left: 4px solid var(--warn);
+    padding: 0.75rem 1rem 0.75rem 2rem;
+    border-radius: var(--radius);
+    margin-top: 0.5rem;
+  }
+  .warnings li { color: #92400E; }
+  /* ---- Footer ---- */
+  footer.report-footer {
+    color: var(--muted);
+    font-size: 0.8rem;
+    margin-top: 4rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+    text-align: center;
+  }
+  /* ---- Responsive (mobile-first 375px) ---- */
+  @media (max-width: 480px) {
+    main { padding: 1rem 0.75rem 2rem; }
+    header.report-header h1 { font-size: 1.4rem; }
+    section > h2 { font-size: 1.1rem; }
+    th, td { padding: 0.5rem 0.6rem; font-size: 0.95rem; }
+    th { width: auto; }
+  }
+  /* ---- Print ---- */
+  @media print {
+    body { background: #fff; }
+    main { padding: 0; max-width: 100%; }
+    .summary, table, .missing-notice, .warnings { box-shadow: none; }
+    section { break-inside: avoid; }
+    footer.report-footer { display: none; }
+  }
 </style>
 </head>
 <body>
-<h1>{{ dept_name }} 주간보고 — {{ week }}</h1>
+<main>
+  <header class="report-header">
+    <p class="eyebrow">주간보고</p>
+    <h1>{{ dept_name }} — {{ week }}</h1>
+  </header>
 
-<div class="summary">
-  <strong>종합 요약</strong><br>
-  {{ result.부서_종합_요약 | replace('\n', '<br>') | safe }}
-</div>
+  <section aria-labelledby="summary-heading">
+    <h2 id="summary-heading">종합 요약</h2>
+    <div class="summary">
+      <strong>이번 주 핵심</strong>
+      {{ result.부서_종합_요약 | replace('\n', '<br>') | safe }}
+    </div>
+    {% if result.미작성_파트 %}
+    <p class="missing-notice" role="alert">
+      미작성 파트: {{ result.미작성_파트 | join(", ") }}
+    </p>
+    {% endif %}
+  </section>
 
-{% if result.미작성_파트 %}
-<p class="missing">
-  미작성 파트: {{ result.미작성_파트 | join(", ") }}
-</p>
-{% endif %}
+  {% if result.진척률 %}
+  <section aria-labelledby="progress-heading">
+    <h2 id="progress-heading">파트별 진척률</h2>
+    <table class="progress-table">
+      <thead>
+        <tr><th scope="col">파트</th><th scope="col" class="pct">진척률</th><th scope="col">시각화</th></tr>
+      </thead>
+      <tbody>
+      {% for part, pct in result.진척률.items() %}
+        <tr>
+          <td>{{ part }}</td>
+          <td class="pct">{{ pct }}%</td>
+          <td>
+            <div class="progress-bar"
+                 role="progressbar"
+                 aria-valuenow="{{ pct }}"
+                 aria-valuemin="0"
+                 aria-valuemax="100"
+                 aria-label="{{ part }} 진척률 {{ pct }}%">
+              <div class="progress-fill" style="width: {{ pct }}%"></div>
+            </div>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
+  {% endif %}
 
-<h2>파트별 진척률</h2>
-<table>
-<thead><tr><th>파트</th><th>진척률</th><th>비주얼</th></tr></thead>
-<tbody>
-{% for part, pct in result.진척률.items() %}
-  <tr>
-    <td>{{ part }}</td>
-    <td>{{ pct }}%</td>
-    <td><div class="progress-bar"><div class="progress-fill" style="width: {{ pct }}%"></div></div></td>
-  </tr>
-{% endfor %}
-</tbody>
-</table>
+  {% if result.파트별_핵심 %}
+  <section aria-labelledby="parts-heading">
+    <h2 id="parts-heading">파트별 핵심</h2>
+    {% for part, info in result.파트별_핵심.items() %}
+    <h3>{{ part }}</h3>
+    <table>
+      <tr><th scope="row">주요 성과</th><td><ul>{% for x in info.주요_성과 %}<li>{{ x }}</li>{% endfor %}</ul></td></tr>
+      <tr><th scope="row">주요 이슈</th><td><ul>{% for x in info.주요_이슈 %}<li>{{ x }}</li>{% endfor %}</ul></td></tr>
+      <tr><th scope="row">차주 계획</th><td><ul>{% for x in info.차주_계획 %}<li>{{ x }}</li>{% endfor %}</ul></td></tr>
+      <tr><th scope="row">리스크</th><td><ul>{% for x in info.리스크 %}<li>{{ x }}</li>{% endfor %}</ul></td></tr>
+    </table>
+    {% endfor %}
+  </section>
+  {% endif %}
 
-<h2>파트별 핵심</h2>
-{% for part, info in result.파트별_핵심.items() %}
-<h3>{{ part }}</h3>
-<table>
-<tr><th>주요 성과</th><td><ul>{% for x in info.주요_성과 %}<li>{{ x }}</li>{% endfor %}</ul></td></tr>
-<tr><th>주요 이슈</th><td><ul>{% for x in info.주요_이슈 %}<li>{{ x }}</li>{% endfor %}</ul></td></tr>
-<tr><th>차주 계획</th><td><ul>{% for x in info.차주_계획 %}<li>{{ x }}</li>{% endfor %}</ul></td></tr>
-<tr><th>리스크</th><td><ul>{% for x in info.리스크 %}<li>{{ x }}</li>{% endfor %}</ul></td></tr>
-</table>
-{% endfor %}
+  {% if result.주의사항 %}
+  <section aria-labelledby="warnings-heading">
+    <h2 id="warnings-heading">주의사항</h2>
+    <ul class="warnings">
+    {% for x in result.주의사항 %}
+      <li>{{ x }}</li>
+    {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
 
-{% if result.주의사항 %}
-<h2>주의사항</h2>
-<ul>
-{% for x in result.주의사항 %}
-  <li>{{ x }}</li>
-{% endfor %}
-</ul>
-{% endif %}
-
-<p class="footnote">
-  생성: {{ generated_at }} · /weekly v{{ weekly_version }} · placeholder design (replace via /design-consultation)
-</p>
+  <footer class="report-footer">
+    생성: {{ generated_at }} · /weekly v{{ weekly_version }}
+  </footer>
+</main>
 </body>
 </html>
