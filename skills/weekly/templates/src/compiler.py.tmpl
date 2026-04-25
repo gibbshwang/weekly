@@ -1,0 +1,68 @@
+"""Compile stage — read all part .md files, call LLM, return structured result.
+
+The LLM is invoked via subprocess (Codex CLI or Gemini CLI). The system
+prompt enforces JSON output. We tolerate occasional markdown code-fence
+wrapping and strip it before json.loads.
+"""
+import json
+from pathlib import Path
+from typing import Any, Dict, List, Tuple
+
+from jinja2 import Template
+
+
+def collect_parts(
+    md_dir: Path,
+    parts: List[str],
+    pattern: str = "{part}.md",
+) -> List[Tuple[str, str]]:
+    """Read each part's .md from `md_dir`. Returns list of (part_name, content).
+
+    Missing files are returned as (part_name, "") so the LLM can flag them.
+    """
+    out: List[Tuple[str, str]] = []
+    for part in parts:
+        path = md_dir / pattern.format(part=part)
+        if path.exists():
+            out.append((part, path.read_text(encoding="utf-8")))
+        else:
+            out.append((part, ""))
+    return out
+
+
+def _strip_code_fence(text: str) -> str:
+    """Remove ```json ... ``` wrapping if present."""
+    text = text.strip()
+    if text.startswith("```"):
+        # split off the first fence line
+        text = text.split("```", 2)[1]
+        # drop optional language tag
+        if text.lstrip().startswith("json"):
+            text = text.lstrip()[4:]
+        # remove trailing fence
+        text = text.rsplit("```", 1)[0]
+    return text.strip()
+
+
+def run_compile(
+    llm,
+    dept_name: str,
+    parts: List[str],
+    week: str,
+    parts_data: List[Tuple[str, str]],
+    prompt_template_path: Path,
+) -> Dict[str, Any]:
+    """Run a compile pass. Returns parsed JSON dict from the LLM."""
+    sys_prompt = Template(prompt_template_path.read_text(encoding="utf-8")).render(
+        dept_name=dept_name, parts=parts, week=week
+    )
+    user_lines = [f"## 부서 = {dept_name}, 주차 = {week}"]
+    for part_name, content in parts_data:
+        user_lines.append(f"\n--- 파트: {part_name} ---")
+        if content.strip():
+            user_lines.append(content)
+        else:
+            user_lines.append("(미작성)")
+    user_prompt = "\n".join(user_lines)
+    raw = llm.call(sys_prompt, user_prompt)
+    return json.loads(_strip_code_fence(raw))
