@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "weekly-runtime-{{ dept_slug }}"
+version = "0.1.0"
+description = "Generated /weekly project for {{ dept_name }}"
+requires-python = ">=3.10"
+dependencies = [
+  "click>=8.1",
+  "pydantic>=2.6",
+  "PyYAML>=6.0",
+  "openpyxl>=3.1",
+  "Jinja2>=3.1",
+  "keyring>=25.0",
+]
+
+[project.scripts]
+wreport = "weekly_runtime.cli:cli"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["weekly_runtime*"]
