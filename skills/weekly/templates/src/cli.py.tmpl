@@ -1,13 +1,13 @@
 """wreport — Click CLI for the generated weekly_runtime project.
 
 Phase 0 commands: init (stub), compile (end-to-end).
-Phase 1 will add: assign, status.
+Phase 1 commands: assign, status, schedule install/uninstall/status.
 
 AI calls go through Codex CLI or Gemini CLI subprocess (no API keys).
 SMTP password is loaded from OS keyring at compile time.
 """
 import sys
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from typing import Optional
 
@@ -20,6 +20,11 @@ from .compiler import collect_parts, run_compile
 from .dashboard import render_dashboard
 from .mailer import send_compile_mail
 from .llm_client import get_llm_client
+from .assigner import run_assign
+from .status import compute_status, format_status_report
+from .scheduler import install_task, uninstall_task, list_tasks
+from .audit import log_event
+from .excel import read_instructions
 
 
 @click.group()
@@ -54,8 +59,7 @@ def init_cmd(dept: str) -> None:
               help="Generate dashboard but skip mail send.")
 def compile_cmd(dept: str, week_str: Optional[str], config_path: Optional[Path], dry_run: bool) -> None:
     """Compile this week's reports → dashboard → email."""
-    cfg_path = config_path or Path.cwd() / "config.yaml"
-    cfg = load_config(cfg_path)
+    cfg = _load_cfg(config_path)
     if cfg.department.name != dept:
         click.echo(f"WARN: dept arg '{dept}' != config.department.name '{cfg.department.name}'", err=True)
 
@@ -134,6 +138,141 @@ def compile_cmd(dept: str, week_str: Optional[str], config_path: Optional[Path],
 def _current_iso_week() -> str:
     iso_year, iso_week, _ = date.today().isocalendar()
     return f"{iso_year}-W{iso_week:02d}"
+
+
+def _load_cfg(config_path):
+    """Resolve config.yaml path (default: ./config.yaml) and load it."""
+    return load_config(config_path or Path.cwd() / "config.yaml")
+
+
+@cli.command("assign")
+@click.argument("dept", type=str)
+@click.option("--config", "config_path", type=click.Path(path_type=Path), default=None)
+@click.option("--week", "week_str", type=str, default=None)
+def assign_cmd(dept: str, config_path, week_str) -> None:
+    """One assign tick — diff xlsx, infer parts, append to <part>.md, mail affected leads."""
+    cfg = _load_cfg(config_path)
+    week = week_str or _current_iso_week()
+    storage_root = Path(cfg.storage.root) / cfg.department.name
+    xlsx_path = storage_root / "_지시사항.xlsx"
+    if not xlsx_path.exists():
+        click.echo(f"No instructions xlsx at {xlsx_path}, skipping.", err=True)
+        return
+    state_path = storage_root / week / "_assignments_state.json"
+    md_dir = storage_root / week
+    audit_log = storage_root / "logs" / "audit.jsonl"
+
+    rows = read_instructions(xlsx_path)
+    llm = get_llm_client(provider=cfg.ai.provider, model=cfg.ai.model_assign)
+
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+    # Resolve assign prompt path: shipped at weekly_runtime/prompts/assign_system.txt
+    prompt_path = Path(__file__).parent / "prompts" / "assign_system.txt"
+    if not prompt_path.exists():
+        prompt_path = Path(__file__).parent / "prompts" / "assign_system.txt.tmpl"
+
+    affected = run_assign(
+        rows=rows,
+        parts=cfg.department.parts,
+        state_path=state_path,
+        md_dir=md_dir,
+        llm=llm,
+        dept_name=cfg.department.name,
+        prompt_template_path=prompt_path,
+        timestamp=timestamp,
+    )
+
+    log_event(
+        audit_log, "assign",
+        week=week, rows=len(rows),
+        affected_parts=list(affected.keys()),
+    )
+
+    if not affected:
+        click.echo("No new/modified rows.")
+        return
+
+    smtp_password = get_secret(f"weekly-{cfg.department.name}", "smtp_password")
+    affected_emails = [pl.email for pl in cfg.part_leads if pl.part in affected]
+    body_lines = [f"  - {p}: row {idx_list}" for p, idx_list in affected.items()]
+    body = (f"이번 시간 추가된 지시 {sum(len(v) for v in affected.values())}건:\n\n"
+            + "\n".join(body_lines))
+    send_compile_mail(
+        host=cfg.smtp.host, port=cfg.smtp.port, use_tls=cfg.smtp.use_tls,
+        user=cfg.smtp.user, password=smtp_password, sender=cfg.smtp.user,
+        to=affected_emails, cc=[],
+        subject=f"[/weekly] {cfg.department.name} 지시 분배 — {week}",
+        body_text=body,
+    )
+    log_event(audit_log, "assign_mail", week=week, recipients=len(affected_emails))
+    click.echo(f"Assigned to {list(affected.keys())} — {len(affected_emails)} mails sent.")
+
+
+@cli.command("status")
+@click.argument("dept", type=str)
+@click.option("--config", "config_path", type=click.Path(path_type=Path), default=None)
+@click.option("--week", "week_str", type=str, default=None)
+def status_cmd(dept, config_path, week_str) -> None:
+    """Show writing progress for the given week."""
+    cfg = _load_cfg(config_path)
+    week = week_str or _current_iso_week()
+    md_dir = Path(cfg.storage.root) / cfg.department.name / week
+    statuses = compute_status(md_dir, cfg.department.parts)
+    click.echo(format_status_report(statuses, week=week, dept_name=cfg.department.name))
+
+
+@cli.group("schedule")
+def schedule_group() -> None:
+    """Manage OS scheduled tasks (install/uninstall/status)."""
+
+
+@schedule_group.command("install")
+@click.argument("dept", type=str)
+@click.option("--config", "config_path", type=click.Path(path_type=Path), default=None)
+def schedule_install_cmd(dept, config_path) -> None:
+    cfg = _load_cfg(config_path)
+    project_root = Path.cwd()
+    if sys.platform == "win32":
+        wreport = project_root / "venv" / "Scripts" / "wreport.exe"
+    else:
+        wreport = project_root / "venv" / "bin" / "wreport"
+    install_task(
+        name=f"weekly-{cfg.department.name}-assign",
+        cron=cfg.schedule.assign_cron,
+        command=f'"{wreport}" assign {cfg.department.name}',
+        working_dir=str(project_root),
+    )
+    install_task(
+        name=f"weekly-{cfg.department.name}-compile",
+        cron=cfg.schedule.compile_cron,
+        command=f'"{wreport}" compile {cfg.department.name}',
+        working_dir=str(project_root),
+    )
+    click.echo(f"Installed weekly-{cfg.department.name}-assign and -compile.")
+
+
+@schedule_group.command("uninstall")
+@click.argument("dept", type=str)
+@click.option("--config", "config_path", type=click.Path(path_type=Path), default=None)
+def schedule_uninstall_cmd(dept, config_path) -> None:
+    cfg = _load_cfg(config_path)
+    uninstall_task(f"weekly-{cfg.department.name}-assign")
+    uninstall_task(f"weekly-{cfg.department.name}-compile")
+    click.echo("Uninstalled.")
+
+
+@schedule_group.command("status")
+@click.argument("dept", type=str)
+@click.option("--config", "config_path", type=click.Path(path_type=Path), default=None)
+def schedule_status_cmd(dept, config_path) -> None:
+    cfg = _load_cfg(config_path)
+    tasks = list_tasks(prefix=f"weekly-{cfg.department.name}-")
+    if not tasks:
+        click.echo("No /weekly tasks registered.")
+    else:
+        for t in tasks:
+            click.echo(f"  ✓ {t}")
 
 
 if __name__ == "__main__":
