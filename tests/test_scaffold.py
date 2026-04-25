@@ -69,3 +69,22 @@ def test_scaffold_llm_module_uses_subprocess(tmp_path: Path):
     assert "from anthropic" not in llm_text
     assert "from openai" not in llm_text
     assert "from google.generativeai" not in llm_text
+
+
+def test_scaffold_copies_phase1_files(tmp_path: Path):
+    """Verify scaffold.py correctly copies all Phase 1 modules + assign_system prompt."""
+    target = tmp_path / "weekly_test"
+    bundle_root = BUNDLE_ROOT
+    scaffold_project(
+        target=target, dept_slug="x", dept_name="x",
+        bundle_root=bundle_root, install_pkg=False,
+    )
+    pkg = target / "weekly_runtime"
+    # Phase 1 modules
+    assert (pkg / "assigner.py").exists(), "assigner.py not found"
+    assert (pkg / "status.py").exists(), "status.py not found"
+    assert (pkg / "scheduler.py").exists(), "scheduler.py not found"
+    assert (pkg / "audit.py").exists(), "audit.py not found"
+    assert (pkg / "storage" / "smb.py").exists(), "storage/smb.py not found"
+    # Phase 1 prompt (renamed from .tmpl to .txt during scaffold)
+    assert (pkg / "prompts" / "assign_system.txt").exists(), "assign_system.txt not found"
