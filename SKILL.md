@@ -41,8 +41,19 @@ PRD §1.2의 "사전 승인 AI CLI 채널만" 제약을 충실히 따른다:
 | 4 | scripts/xlsx_template.py | `_지시사항.xlsx`를 storage root에 생성 (양식 + dropdown) |
 | 5 | scripts/keyring_setup.py | SMTP password + AI API key를 OS keyring에 저장 |
 | 6 | scripts/smtp_test.py | 그룹장에게 테스트 메일 발송 + 도착 확인 |
-| 7 | (Phase 1) scripts/schedule_install.py | cron 등록 — Phase 0에선 skip |
+| 7 | scripts/schedule_install.py | cron 등록 — assign(시간) + compile(주간) Task Scheduler 등록 |
 | 8 | scripts/handoff.py | README.md 생성 + 운영 가이드 출력 |
+
+## Runtime Commands (post-scaffold, via `wreport`)
+
+| Command | When | Action |
+|---------|------|--------|
+| `wreport compile <부서>` | manual or weekly cron | AI 취합 → dashboard.html → 메일 (그룹장+파트장) |
+| `wreport assign <부서>` | hourly cron | xlsx 변경 감지 → 분배 → 영향 파트장 메일 |
+| `wreport status <부서>` | manual | 작성 진척 표시 |
+| `wreport schedule install <부서>` | once after init | OS 스케줄러 등록 |
+| `wreport schedule uninstall <부서>` | when retiring | 스케줄러 해제 |
+| `wreport schedule status <부서>` | manual | 등록된 작업 확인 |
 
 ## Post-Scaffold Operations
 
@@ -63,7 +74,14 @@ Phase 0 첫 wave에서 별도로 `/design-consultation`을 호출해 대시보�
 
 - `SKILL.md` — 본 문서
 - `scripts/` — 9-stage 파이프라인 스크립트 (Phase 0: 0,1,2,3,4,5,6,8 — Phase 1: 7)
+  - `scripts/schedule_install.py` — Stage 7: OS 스케줄러 등록 (compile/assign cron)
 - `scripts/lib/` — /udd에서 재사용한 헬퍼 (platform_detect, llm_call, template_render, telegram)
 - `templates/` — 생성 프로젝트의 src/ + 양식 파일들
+  - `templates/src/assigner.py.tmpl` — distribution engine (xl 변경 → 파트별 분배)
+  - `templates/src/status.py.tmpl` — progress introspection (작성 진척도 표시)
+  - `templates/src/scheduler.py.tmpl` — schtasks/cron registration
+  - `templates/src/audit.py.tmpl` — JSON Lines event logger
+  - `templates/src/storage/smb.py.tmpl` — SMB backend
+  - `templates/src/prompts/assign_system.txt.tmpl` — distribution AI prompt
 - `tests/` — pytest 단위/통합 테스트
 - `fixtures/` — 테스트용 샘플 xlsx + .md
