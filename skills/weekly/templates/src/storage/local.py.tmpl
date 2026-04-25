@@ -1,0 +1,42 @@
+"""LocalStorage — Path-based backend for dogfood / single-PC setups."""
+from pathlib import Path
+from typing import Iterable, Union
+
+from .base import Storage
+
+
+class LocalStorage:
+    def __init__(self, root: Union[str, Path]) -> None:
+        self.root = Path(root)
+        self.root.mkdir(parents=True, exist_ok=True)
+
+    def _abs(self, relpath: Path) -> Path:
+        return self.root / Path(relpath)
+
+    def read_text(self, relpath: Path) -> str:
+        return self._abs(relpath).read_text(encoding="utf-8")
+
+    def read_bytes(self, relpath: Path) -> bytes:
+        return self._abs(relpath).read_bytes()
+
+    def write_text(self, relpath: Path, content: str) -> None:
+        p = self._abs(relpath)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(content, encoding="utf-8")
+
+    def write_bytes(self, relpath: Path, content: bytes) -> None:
+        p = self._abs(relpath)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_bytes(content)
+
+    def exists(self, relpath: Path) -> bool:
+        return self._abs(relpath).exists()
+
+    def list_dir(self, relpath: Path) -> Iterable[Path]:
+        d = self._abs(relpath)
+        if not d.is_dir():
+            return []
+        return [Path(p.name) for p in sorted(d.iterdir())]
+
+    def mtime(self, relpath: Path) -> float:
+        return self._abs(relpath).stat().st_mtime

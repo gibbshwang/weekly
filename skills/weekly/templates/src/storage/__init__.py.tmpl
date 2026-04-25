@@ -1,0 +1,8 @@
+"""Storage abstraction for weekly_runtime.
+
+Phase 0 ships LocalStorage only. Phase 1 adds SMBStorage.
+"""
+from .base import Storage
+from .local import LocalStorage
+
+__all__ = ["Storage", "LocalStorage"]
