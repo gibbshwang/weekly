@@ -1,0 +1,70 @@
+"""Pydantic config models for weekly_runtime.
+
+Loaded from `config.yaml` at the project root (the directory `wreport` is invoked from).
+"""
+from pathlib import Path
+from typing import List, Literal, Optional
+import yaml
+from pydantic import BaseModel, Field
+
+
+class Department(BaseModel):
+    name: str
+    parts: List[str]
+
+
+class Person(BaseModel):
+    name: str
+    email: str  # plain str — allow non-RFC compliant test addresses
+
+
+class PartLead(BaseModel):
+    part: str
+    name: str
+    email: str
+
+
+class StorageConfig(BaseModel):
+    type: Literal["local", "smb"]
+    root: str  # path string (Windows or Unix), or UNC
+
+
+class ScheduleConfig(BaseModel):
+    assign_cron: str
+    compile_cron: str
+    timezone: str = "Asia/Seoul"
+
+
+class SMTPConfig(BaseModel):
+    host: str
+    port: int
+    use_tls: bool = True
+    user: str
+    # password loaded from OS keyring (not in yaml)
+
+
+class AIConfig(BaseModel):
+    provider: Literal["codex", "gemini"] = "codex"
+    model_assign: Optional[str] = None
+    model_compile: Optional[str] = None
+
+
+class PromptsConfig(BaseModel):
+    override_dir: Optional[str] = None
+
+
+class WeeklyConfig(BaseModel):
+    department: Department
+    group_lead: Person
+    part_leads: List[PartLead]
+    storage: StorageConfig
+    schedule: ScheduleConfig
+    smtp: SMTPConfig
+    ai: AIConfig
+    prompts: PromptsConfig = Field(default_factory=PromptsConfig)
+
+
+def load_config(path: Path) -> WeeklyConfig:
+    """Load and validate config.yaml."""
+    data = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
+    return WeeklyConfig.model_validate(data)
