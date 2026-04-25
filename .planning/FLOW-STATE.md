@@ -5,6 +5,14 @@
 **Updated:** 2026-04-25 (post-dogfooding session)
 **Status:** Live in production — 사용자 `apt-price-trend` 프로젝트가 매주 일요일 13:00 자동 cron 동작 중
 
+## ⚠️ 새 세션에서 즉시 처리할 작업
+
+**WRAH (Weekly Report Automation Harness) 새 스킬 기획**
+- PRD 수령됨 (텔레그램 첨부 → docx 추출 완료)
+- 핸드오프 메모: `.planning/WRAH-PLANNING-HANDOFF.md`에 PRD 요약 + 초안 계획 + Open Questions 작성 완료
+- 다음 세션에서 즉시 시작: 위 핸드오프 파일 읽고 → /brainstorm → /gsd-new-project 또는 /gsd-plan-phase
+- /udd에서 검증된 패턴 재사용 권장 (config-per-부서, multi-CLI, AI adapter, 9-stage 파이프라인)
+
 ## Final Position (/udd)
 
 - 마스터 HEAD: `84b2eba` (2026-04-25, after PR #14)
