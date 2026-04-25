@@ -1,0 +1,29 @@
+department:
+  name: "{{ dept_name }}"
+  parts:
+{% for p in parts %}    - "{{ p }}"
+{% endfor %}
+group_lead:
+  name: "{{ group_lead_name }}"
+  email: "{{ group_lead_email }}"
+part_leads:
+{% for pl in part_leads %}  - part: "{{ pl.part }}"
+    name: "{{ pl.name }}"
+    email: "{{ pl.email }}"
+{% endfor %}
+storage:
+  type: "{{ storage_type }}"
+  root: {{ storage_root | tojson }}
+schedule:
+  assign_cron: "{{ assign_cron | default('0 * * * *') }}"
+  compile_cron: "{{ compile_cron | default('0 17 * * 5') }}"
+  timezone: "{{ timezone | default('Asia/Seoul') }}"
+smtp:
+  host: "{{ smtp_host }}"
+  port: {{ smtp_port }}
+  use_tls: {{ smtp_use_tls | lower }}
+  user: "{{ smtp_user }}"
+ai:
+  provider: "{{ ai_provider }}"
+prompts:
+  override_dir: null
