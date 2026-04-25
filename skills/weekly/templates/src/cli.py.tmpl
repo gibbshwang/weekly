@@ -1,0 +1,140 @@
+"""wreport — Click CLI for the generated weekly_runtime project.
+
+Phase 0 commands: init (stub), compile (end-to-end).
+Phase 1 will add: assign, status.
+
+AI calls go through Codex CLI or Gemini CLI subprocess (no API keys).
+SMTP password is loaded from OS keyring at compile time.
+"""
+import sys
+from datetime import date
+from pathlib import Path
+from typing import Optional
+
+import click
+
+from .config import load_config
+from .keyring_helper import get_secret
+from .storage import LocalStorage
+from .compiler import collect_parts, run_compile
+from .dashboard import render_dashboard
+from .mailer import send_compile_mail
+from .llm_client import get_llm_client
+
+
+@click.group()
+def cli() -> None:
+    """wreport — Weekly Report Automation Harness runtime CLI."""
+
+
+@cli.command("init")
+@click.argument("dept", type=str)
+def init_cmd(dept: str) -> None:
+    """Re-run the /weekly init pipeline.
+
+    Phase 0 stub: prints a message instructing the user to invoke `/weekly init <dept>`
+    via their CLI host (Claude Code/Codex/Gemini). The actual scaffold is in the skill
+    bundle, not this binary.
+    """
+    click.echo(
+        f"To initialize a new department, invoke `/weekly init {dept}` in your CLI host "
+        f"(Claude Code/Codex CLI/Gemini CLI).\n"
+        f"This binary (`wreport`) is for post-scaffold operations only.\n"
+        f"If you want to *re-scaffold* this department, ask the host CLI to re-run /weekly init."
+    )
+
+
+@cli.command("compile")
+@click.argument("dept", type=str)
+@click.option("--week", "week_str", type=str, default=None,
+              help="ISO week, e.g. 2026-W18. Defaults to current week.")
+@click.option("--config", "config_path", type=click.Path(path_type=Path), default=None,
+              help="Path to config.yaml. Defaults to ./config.yaml from the project root.")
+@click.option("--dry-run", is_flag=True, default=False,
+              help="Generate dashboard but skip mail send.")
+def compile_cmd(dept: str, week_str: Optional[str], config_path: Optional[Path], dry_run: bool) -> None:
+    """Compile this week's reports → dashboard → email."""
+    cfg_path = config_path or Path.cwd() / "config.yaml"
+    cfg = load_config(cfg_path)
+    if cfg.department.name != dept:
+        click.echo(f"WARN: dept arg '{dept}' != config.department.name '{cfg.department.name}'", err=True)
+
+    week = week_str or _current_iso_week()
+    click.echo(f"Compiling {cfg.department.name} {week}...")
+
+    # Storage points to the dept's data root inside the configured storage.root
+    storage_root = Path(cfg.storage.root) / cfg.department.name
+    storage = LocalStorage(root=storage_root)
+    md_dir = storage_root / week
+
+    parts_data = collect_parts(md_dir, cfg.department.parts)
+
+    # LLM: validates binary at construction (codex or gemini CLI must be in PATH)
+    llm = get_llm_client(provider=cfg.ai.provider, model=cfg.ai.model_compile)
+
+    # Resolve prompt template path: project ships it at weekly_runtime/prompts/
+    prompt_path = Path(__file__).parent / "prompts" / "compile_system.txt"
+    if not prompt_path.exists():
+        # Fallback to project root templates dir
+        prompt_path = Path.cwd() / "weekly_runtime" / "prompts" / "compile_system.txt"
+    result = run_compile(
+        llm=llm,
+        dept_name=cfg.department.name,
+        parts=cfg.department.parts,
+        week=week,
+        parts_data=parts_data,
+        prompt_template_path=prompt_path,
+    )
+
+    # Resolve dashboard template path
+    dashboard_tmpl = Path(__file__).parent / "templates" / "template_dashboard.html.j2"
+    if not dashboard_tmpl.exists():
+        dashboard_tmpl = Path.cwd() / "weekly_runtime" / "templates" / "template_dashboard.html.j2"
+    html = render_dashboard(
+        result=result,
+        dept_name=cfg.department.name,
+        week=week,
+        template_path=dashboard_tmpl,
+    )
+
+    out_path = md_dir / "_dashboard.html"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(html, encoding="utf-8")
+    click.echo(f"Dashboard: {out_path}")
+
+    if dry_run:
+        click.echo("Dry run — skipping mail.")
+        return
+
+    # SMTP password from OS keyring (only secret we still store)
+    smtp_password = get_secret(f"weekly-{cfg.department.name}", "smtp_password")
+    cc = [pl.email for pl in cfg.part_leads]
+    send_compile_mail(
+        host=cfg.smtp.host,
+        port=cfg.smtp.port,
+        use_tls=cfg.smtp.use_tls,
+        user=cfg.smtp.user,
+        password=smtp_password,
+        sender=cfg.smtp.user,
+        to=[cfg.group_lead.email],
+        cc=cc,
+        subject=f"{cfg.department.name} 주간보고 {week}",
+        body_text=(
+            f"{cfg.department.name} {week} 보고 첨부합니다.\n\n"
+            f"종합 요약:\n{result.get('부서_종합_요약', '')}\n\n"
+            f"전체 내용은 첨부 _dashboard.html을 확인해주세요.\n\n"
+            f"미작성 파트: {', '.join(result.get('미작성_파트', [])) or '없음'}\n"
+        ),
+        attachment_path=out_path,
+        attachment_name="_dashboard.html",
+    )
+    click.echo("Mail sent.")
+
+
+def _current_iso_week() -> str:
+    iso_year, iso_week, _ = date.today().isocalendar()
+    return f"{iso_year}-W{iso_week:02d}"
+
+
+if __name__ == "__main__":
+    cli()
