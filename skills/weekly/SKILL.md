@@ -1,6 +1,6 @@
 ---
 name: weekly
-description: Weekly Report Automation Harness — end-to-end automation for departmental weekly status reports (group lead instructions → part lead .md updates → AI compile → HTML dashboard → email). Use when the user wants a self-healing, scheduled Python project that runs on a corporate shared folder with SMTP notification. Generates an independent project folder with Click CLI + OS keyring auth + Codex CLI subprocess for AI calls (sanctioned channel only) plus anthropic/gemini SDK fallback.
+description: Weekly Report Automation Harness — end-to-end automation for departmental weekly status reports (group lead instructions → part lead .md updates → AI compile → HTML dashboard → email). Use when the user wants a self-healing, scheduled Python project that runs on a corporate shared folder with SMTP notification. Generates an independent project folder with Click CLI + OS keyring auth + Codex CLI subprocess for AI calls (sanctioned channel only) and Gemini CLI subprocess fallback.
 author: gibbs hwang
 version: 0.1.0
 ---
@@ -14,8 +14,8 @@ version: 0.1.0
 ## AI 채널 제약 (사용자 결정 2026-04-25)
 
 PRD §1.2의 "사전 승인 AI CLI 채널만" 제약을 충실히 따른다:
-- **AI가 사용되는 모든 호출은 Codex CLI subprocess로 처리** (`codex exec`)
-- AI Python SDK(openai/anthropic/google-generativeai)는 dogfood/fallback 용도만
+- **AI가 사용되는 모든 호출은 Codex CLI 또는 Gemini CLI subprocess로 처리** (`codex exec` / `gemini -p`)
+- 외부 AI API(anthropic/openai/google-generativeai SDK 등) 사용 금지 — 보안정책상 차단됨
 - 비-AI 작업(SMTP 발송, Jinja2 HTML 렌더링, openpyxl xlsx 처리)은 일반 Python 라이브러리 사용
 
 ## 자율 모드 (Autonomous Mode)
