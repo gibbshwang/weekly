@@ -14,6 +14,7 @@ dependencies = [
   "pydantic>=2.6",
   "click>=8.1",
   "keyring>=25.0",
+  "requests>=2.31",
 ]
 # NOTE: No AI SDK deps (anthropic / openai / google-generativeai). Per security
 # policy, AI calls go through Codex CLI / Gemini CLI subprocess only. The
