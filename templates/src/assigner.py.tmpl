@@ -1,0 +1,149 @@
+"""Distribution engine — diffs new/modified xlsx rows, infers target parts, appends to <part>.md.
+
+Sidecar JSON state at `<dept>/<week>/_assignments_state.json` tracks processed
+row hashes so repeated cron ticks only handle new/modified rows.
+
+NOTE: _strip_code_fence logic is intentionally duplicated from compiler.py.tmpl
+(7 lines, zero external state). DRY's cost-benefit fails for this small,
+clearly bounded helper — extracting a shared module would couple two otherwise
+independent templates. Defer consolidation until a third consumer appears.
+"""
+import hashlib
+import json
+from pathlib import Path
+from typing import Any, Dict, List, Tuple
+
+from jinja2 import Template
+
+
+def _row_hash(row: Dict[str, Any]) -> str:
+    canonical = json.dumps(row, sort_keys=True, ensure_ascii=False)
+    return "sha256:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _strip_code_fence(text: str) -> str:
+    text = text.strip()
+    if text.startswith("```"):
+        text = text.split("```", 2)[1]
+        if text.lstrip().startswith("json"):
+            text = text.lstrip()[4:]
+        text = text.rsplit("```", 1)[0]
+    return text.strip()
+
+
+def diff_rows(rows: List[Dict[str, Any]], state_path: Path) -> Tuple[List[int], List[int]]:
+    """Compare rows to last-known state. Returns (new_indices, modified_indices)."""
+    state_path = Path(state_path)
+    if not state_path.exists():
+        return list(range(len(rows))), []
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    known = {entry["row_index"]: entry["row_hash"] for entry in state.get("rows", [])}
+    new_idx, mod_idx = [], []
+    for i, row in enumerate(rows):
+        h = _row_hash(row)
+        if i not in known:
+            new_idx.append(i)
+        elif known[i] != h:
+            mod_idx.append(i)
+    return new_idx, mod_idx
+
+
+def resolve_target_part(row: Dict[str, Any], parts: List[str], llm,
+                        dept_name: str, prompt_template_path: Path) -> Tuple[str, str]:
+    """Decide which part this row belongs to.
+
+    Returns (part_name, method) where method is "column" or "ai_inferred".
+    If LLM returns an invalid part, falls back to parts[0].
+    """
+    candidate = (row.get("담당파트") or "").strip()
+    if candidate in parts:
+        return candidate, "column"
+    sys_prompt = Template(Path(prompt_template_path).read_text(encoding="utf-8")).render(
+        dept_name=dept_name, parts=parts,
+    )
+    user_prompt = json.dumps(
+        {k: row.get(k, "") for k in ["일자", "지시내용", "우선순위", "마감", "비고"]},
+        ensure_ascii=False,
+    )
+    raw = llm.call(sys_prompt, user_prompt)
+    decision = json.loads(_strip_code_fence(raw))
+    inferred = decision["추정_담당파트"]
+    if inferred not in parts:
+        inferred = parts[0]
+    return inferred, "ai_inferred"
+
+
+def append_assignment(md_dir: Path, part: str, row: Dict[str, Any], timestamp: str) -> None:
+    """Append a new instruction block to <part>.md (creating file with header if missing)."""
+    md_dir = Path(md_dir)
+    md_dir.mkdir(parents=True, exist_ok=True)
+    md_path = md_dir / f"{part}.md"
+    block = (
+        f"\n### [추가됨 {timestamp}] {row.get('지시내용', '').strip()}\n"
+        f"- 일자: {row.get('일자', '')}\n"
+        f"- 우선순위: {row.get('우선순위', '')}\n"
+        f"- 마감: {row.get('마감', '')}\n"
+    )
+    if row.get("비고"):
+        block += f"- 비고: {row['비고']}\n"
+    if md_path.exists():
+        md_path.write_text(md_path.read_text(encoding="utf-8") + block, encoding="utf-8")
+    else:
+        header = f"# {part}\n\n## 그룹장 지시 (자동 분배)\n"
+        md_path.write_text(header + block, encoding="utf-8")
+
+
+def update_state(state_path: Path, rows: List[Dict[str, Any]],
+                 entries: List[Tuple[int, str, str]]) -> None:
+    """Persist processed-row state.
+
+    `entries` is List[(row_index, assigned_part, method)].
+    """
+    state_path = Path(state_path)
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "rows": [
+            {
+                "row_index": idx,
+                "row_hash": _row_hash(rows[idx]),
+                "assigned_to": part,
+                "method": method,
+            }
+            for idx, part, method in entries
+        ]
+    }
+    state_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _carry_forward_state(state_path: Path, rows: List[Dict[str, Any]],
+                         skip_indices) -> List[Tuple[int, str, str]]:
+    """Return state entries for rows we are NOT re-processing this tick."""
+    state_path = Path(state_path)
+    if not state_path.exists():
+        return []
+    existing = json.loads(state_path.read_text(encoding="utf-8")).get("rows", [])
+    out = []
+    for entry in existing:
+        if entry["row_index"] not in skip_indices and entry["row_index"] < len(rows):
+            out.append((entry["row_index"], entry["assigned_to"], entry["method"]))
+    return out
+
+
+def run_assign(rows: List[Dict[str, Any]], parts: List[str],
+               state_path: Path, md_dir: Path, llm, dept_name: str,
+               prompt_template_path: Path, timestamp: str) -> Dict[str, List[int]]:
+    """Run a single assign pass. Returns dict {part: [row_indices]} of affected parts."""
+    new_idx, mod_idx = diff_rows(rows, state_path)
+    affected: Dict[str, List[int]] = {}
+    skip = set(new_idx + mod_idx)
+    entries = list(_carry_forward_state(state_path, rows, skip))
+
+    for idx in new_idx + mod_idx:
+        row = rows[idx]
+        part, method = resolve_target_part(row, parts, llm, dept_name, prompt_template_path)
+        append_assignment(md_dir, part, row, timestamp)
+        affected.setdefault(part, []).append(idx)
+        entries.append((idx, part, method))
+
+    update_state(state_path, rows, entries)
+    return affected
