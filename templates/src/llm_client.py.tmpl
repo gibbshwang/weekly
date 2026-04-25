@@ -1,0 +1,25 @@
+"""LLM client for weekly_runtime — facade over the bundled subprocess-based caller.
+
+During scaffold the skill copies `scripts/lib/llm_call.py` to
+`weekly_runtime/_llm.py`. This module re-exports `LLMClient` so application
+code can import a stable name without knowing about the underlying file
+layout.
+
+Per user constraint (security policy): all AI calls use sanctioned CLI
+binaries (codex, gemini) via subprocess. No external AI API SDKs.
+"""
+from typing import Literal
+
+from ._llm import LLMClient
+
+
+def get_llm_client(provider: Literal["codex", "gemini"] = "codex", model: str | None = None) -> LLMClient:
+    """Return an LLMClient configured for the given provider.
+
+    Validates that the corresponding CLI binary (`codex` or `gemini`) is in PATH.
+    Raises ValueError if the binary is missing.
+    """
+    return LLMClient(provider=provider, model=model)
+
+
+__all__ = ["LLMClient", "get_llm_client"]
