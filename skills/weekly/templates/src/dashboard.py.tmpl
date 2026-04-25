@@ -1,0 +1,28 @@
+"""Dashboard renderer — Jinja2 template + minimal placeholder CSS.
+
+Phase 0 ships a minimal placeholder template. A future wave will replace
+`template_dashboard.html.j2` with the /design-consultation output.
+"""
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict
+
+from jinja2 import Template
+
+
+def render_dashboard(
+    result: Dict[str, Any],
+    dept_name: str,
+    week: str,
+    template_path: Path,
+    weekly_version: str = "0.1.0",
+) -> str:
+    """Render the dashboard HTML from a compile result dict."""
+    tmpl = Template(template_path.read_text(encoding="utf-8"))
+    return tmpl.render(
+        result=result,
+        dept_name=dept_name,
+        week=week,
+        generated_at=datetime.now().isoformat(timespec="seconds"),
+        weekly_version=weekly_version,
+    )

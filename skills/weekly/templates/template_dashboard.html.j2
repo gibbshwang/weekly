@@ -1,0 +1,73 @@
+{# Phase 0 placeholder dashboard. /design-consultation will replace later. #}
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>{{ dept_name }} 주간보고 — {{ week }}</title>
+<style>
+  body { font-family: "Pretendard", sans-serif; max-width: 920px; margin: 2em auto; padding: 0 1em; color: #333; }
+  h1 { color: #1B6B5A; border-bottom: 2px solid #1B6B5A; padding-bottom: 0.4em; }
+  h2 { color: #1B6B5A; margin-top: 2em; }
+  .summary { background: #F5F3F0; padding: 1em; border-radius: 8px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 1em; }
+  th, td { border: 1px solid #ddd; padding: 0.6em; text-align: left; vertical-align: top; }
+  th { background: #F5F3F0; }
+  .missing { color: #c00; font-weight: bold; }
+  .progress-bar { background: #eee; height: 14px; border-radius: 7px; overflow: hidden; }
+  .progress-fill { background: #1B6B5A; height: 100%; }
+  .footnote { color: #888; font-size: 0.85em; margin-top: 3em; }
+</style>
+</head>
+<body>
+<h1>{{ dept_name }} 주간보고 — {{ week }}</h1>
+
+<div class="summary">
+  <strong>종합 요약</strong><br>
+  {{ result.부서_종합_요약 | replace('\n', '<br>') | safe }}
+</div>
+
+{% if result.미작성_파트 %}
+<p class="missing">
+  미작성 파트: {{ result.미작성_파트 | join(", ") }}
+</p>
+{% endif %}
+
+<h2>파트별 진척률</h2>
+<table>
+<thead><tr><th>파트</th><th>진척률</th><th>비주얼</th></tr></thead>
+<tbody>
+{% for part, pct in result.진척률.items() %}
+  <tr>
+    <td>{{ part }}</td>
+    <td>{{ pct }}%</td>
+    <td><div class="progress-bar"><div class="progress-fill" style="width: {{ pct }}%"></div></div></td>
+  </tr>
+{% endfor %}
+</tbody>
+</table>
+
+<h2>파트별 핵심</h2>
+{% for part, info in result.파트별_핵심.items() %}
+<h3>{{ part }}</h3>
+<table>
+<tr><th>주요 성과</th><td><ul>{% for x in info.주요_성과 %}<li>{{ x }}</li>{% endfor %}</ul></td></tr>
+<tr><th>주요 이슈</th><td><ul>{% for x in info.주요_이슈 %}<li>{{ x }}</li>{% endfor %}</ul></td></tr>
+<tr><th>차주 계획</th><td><ul>{% for x in info.차주_계획 %}<li>{{ x }}</li>{% endfor %}</ul></td></tr>
+<tr><th>리스크</th><td><ul>{% for x in info.리스크 %}<li>{{ x }}</li>{% endfor %}</ul></td></tr>
+</table>
+{% endfor %}
+
+{% if result.주의사항 %}
+<h2>주의사항</h2>
+<ul>
+{% for x in result.주의사항 %}
+  <li>{{ x }}</li>
+{% endfor %}
+</ul>
+{% endif %}
+
+<p class="footnote">
+  생성: {{ generated_at }} · /weekly v{{ weekly_version }} · placeholder design (replace via /design-consultation)
+</p>
+</body>
+</html>
