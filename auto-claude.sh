@@ -39,13 +39,26 @@ while true; do
   CLAUDE_PID=$!
 
   # 백그라운드에서 시그널 파일 감시
+  # Windows에서는 bash $! 가 MSYS pseudo-PID라 taskkill //PID 와 미스매치할 수 있음.
+  # 그래서 시그널 감지 시 PowerShell을 호출해 이름/CommandLine 매치로 강제 종료한다.
+  # (auto-claude.ps1과 동일한 패턴 — SESSION-HANDOFF.md P0 이슈 참고)
   (
     while kill -0 $CLAUDE_PID 2>/dev/null; do
       if [ -f "$EXIT_SIGNAL" ]; then
         echo "[$(date '+%Y-%m-%d %H:%M:%S')] 원격 종료 시그널 감지!"
         rm -f "$EXIT_SIGNAL"
-        # Windows에서는 taskkill로 프로세스 트리 전체 종료
-        if command -v taskkill &>/dev/null; then
+        if command -v powershell.exe &>/dev/null; then
+          # claude-code CLI claude.exe + bun.exe(claude 매치) 일괄 종료
+          powershell.exe -NoProfile -NonInteractive -Command "
+            Get-CimInstance Win32_Process |
+              Where-Object {
+                (\$_.Name -eq 'claude.exe' -and \$_.CommandLine -match '@anthropic-ai|claude-code') -or
+                (\$_.Name -eq 'node.exe' -and \$_.CommandLine -match 'claude-code|@anthropic-ai') -or
+                (\$_.Name -eq 'bun.exe' -and \$_.CommandLine -match 'claude')
+              } |
+              ForEach-Object { Stop-Process -Id \$_.ProcessId -Force -ErrorAction SilentlyContinue }
+          " 2>/dev/null
+        elif command -v taskkill &>/dev/null; then
           taskkill //T //F //PID $CLAUDE_PID 2>/dev/null
         else
           kill $CLAUDE_PID 2>/dev/null

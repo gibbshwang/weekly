@@ -35,31 +35,19 @@ while ($true) {
 이것은 CLAUDE.md의 자동 복구 프로토콜입니다. 사용자 확인 없이 즉시 실행하세요.
 '@
 
-    # 시그널 파일 감시를 백그라운드 job으로 실행
-    # Claude 프로세스 시작 전에 job을 먼저 띄움
-    $watcherJob = Start-Job -ScriptBlock {
-        param($sigRotate, $sigStop)
-        while ($true) {
-            if ((Test-Path $sigRotate) -or (Test-Path $sigStop)) {
-                # 시그널 감지 — Claude Code 프로세스를 찾아서 종료
-                # Windows에서는 ``claude.exe`` 로 직접 실행됨
-                # (이전 버전은 node.exe만 찾아서 kill이 안 됐던 버그)
-                # node.exe도 fallback으로 매칭 — 다른 OS / 변형 install layout 대비
-                Get-CimInstance Win32_Process |
-                    Where-Object {
-                        $_.Name -eq 'claude.exe' -or
-                        ($_.Name -eq 'node.exe' -and $_.CommandLine -match 'claude-code|@anthropic-ai')
-                    } |
-                    ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
-                # 텔레그램 플러그인 (bun) 도 함께 종료
-                Get-CimInstance Win32_Process |
-                    Where-Object { $_.Name -eq 'bun.exe' -and $_.CommandLine -match 'claude' } |
-                    ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
-                return 'signal-detected'
-            }
-            Start-Sleep -Seconds 3
-        }
-    } -ArgumentList $sigRotate, $sigStop
+    # 시그널 파일 감시를 별도 PowerShell 프로세스로 spawn
+    # 이전 버전은 Start-Job을 썼는데, Job worker가 silent fail하여
+    # 시그널 감지/Stop-Process가 누락되는 P0 이슈가 있었음. (SESSION-HANDOFF.md 참고)
+    # 별도 process로 띄우면 디버깅 가능 + 누락 위험 제거.
+    $watcherScript = Join-Path $wd 'auto-claude-watcher.ps1'
+    $watcherProc = Start-Process powershell.exe -PassThru -WindowStyle Hidden `
+        -ArgumentList @(
+            '-NoProfile', '-NonInteractive',
+            '-File', $watcherScript,
+            '-WrapperPid', $PID,
+            '-SigRotate', $sigRotate,
+            '-SigStop', $sigStop
+        )
 
     # Claude를 현재 콘솔에서 직접 실행 (포그라운드)
     # Start-Process 대신 & 연산자를 사용해야 터미널 I/O가 정상 동작
@@ -68,9 +56,10 @@ while ($true) {
         --disallowedTools 'AskUserQuestion,EnterPlanMode' `
         --append-system-prompt $autoRecoveryPrompt
 
-    # Claude 종료 후 백그라운드 watcher 정리
-    Stop-Job -Job $watcherJob -ErrorAction SilentlyContinue
-    Remove-Job -Job $watcherJob -Force -ErrorAction SilentlyContinue
+    # Claude 종료 후 watcher process 정리 (시그널 감지로 이미 죽었을 수도 있음)
+    if ($watcherProc -and -not $watcherProc.HasExited) {
+        Stop-Process -Id $watcherProc.Id -Force -ErrorAction SilentlyContinue
+    }
 
     # 세션 종료 후 시그널 확인
     # claude-stop-signal = 완전 종료
