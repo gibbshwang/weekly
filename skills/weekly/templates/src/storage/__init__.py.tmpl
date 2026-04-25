@@ -1,8 +1,10 @@
 """Storage abstraction for weekly_runtime.
 
-Phase 0 ships LocalStorage only. Phase 1 adds SMBStorage.
+Phase 0: LocalStorage (single-PC dogfood).
+Phase 1: SMBStorage (UNC-path / shared filesystem).
 """
 from .base import Storage
 from .local import LocalStorage
+from .smb import SMBStorage
 
-__all__ = ["Storage", "LocalStorage"]
+__all__ = ["Storage", "LocalStorage", "SMBStorage"]
