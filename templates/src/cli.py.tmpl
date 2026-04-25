@@ -233,6 +233,10 @@ def schedule_group() -> None:
 def schedule_install_cmd(dept, config_path) -> None:
     cfg = _load_cfg(config_path)
     project_root = Path.cwd()
+    # NOTE: wreport path resolution duplicated in skills/weekly/scripts/schedule_install.py
+    # (used at init time). Different contexts (runtime CLI vs skill script); extracting
+    # would couple skill bundle + project template layers. Duplication is 5 lines, cost
+    # of extraction outweighs benefit.
     if sys.platform == "win32":
         wreport = project_root / "venv" / "Scripts" / "wreport.exe"
     else:
