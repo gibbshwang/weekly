@@ -1,7 +1,12 @@
-"""OS keyring wrapper — store SMTP password and AI API key per department.
+"""OS keyring wrapper — store SMTP password per department.
 
 Service name convention: `weekly-<dept>` (full department name).
-Usernames: `smtp_password`, `ai_api_key` (and others as needed).
+Username: `smtp_password` only.
+
+NOTE: No AI API key storage. Per security policy (2026-04-25), AI calls
+go through sanctioned Codex CLI / Gemini CLI subprocess which use their
+own auth (Enterprise managed credentials / OAuth). The keyring is therefore
+limited to SMTP credentials.
 """
 import keyring
 
