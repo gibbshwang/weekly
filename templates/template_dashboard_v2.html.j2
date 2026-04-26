@@ -295,6 +295,22 @@
   <section aria-labelledby="missing-heading">
     <h2 id="missing-heading">미작성 파트</h2>
     <p class="missing-notice" role="alert">미작성: {{ result.미작성_파트 | join(", ") }}</p>
+    {% if result.미응답_배정항목 %}
+    <p class="missing-subnotice">
+      아래 업무는 자동 배정되었지만 파트장이 아직 응답하지 않았습니다.
+    </p>
+    <ul class="unanswered-list">
+      {% for x in result.미응답_배정항목 %}
+        <li>
+          {% if x.업무ID %}<span class="task-id">{{ x.업무ID }}</span>{% endif %}
+          <span class="part-tag">{{ x.파트 }}</span>
+          {{ x.업무 }}
+          {% if x.마감 %}<span class="task-meta">(마감 {{ x.마감 }})</span>{% endif %}
+          {% if x.우선순위 %}<span class="task-meta">[{{ x.우선순위 }}]</span>{% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
   </section>
   {% endif %}
 
