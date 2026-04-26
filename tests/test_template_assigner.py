@@ -554,6 +554,83 @@ def test_run_assign_state_in_team_root_prevents_cross_week_reassign(tmp_path: Pa
     assert rows_w18 == [], f"이번주 should be empty for w18, got {rows_w18}"
 
 
+def test_run_assign_skips_when_lockfile_held_by_concurrent_run(tmp_path: Path):
+    """Regression: hourly assign cron + LLM fallback / SMTP delay can let
+    two ticks overlap. Without a lock both processes append to the same
+    part workbook → duplicate rows in 이번주.
+
+    run_assign acquires a sidecar lockfile beside state_path. If another
+    process holds it (and the lock isn't stale), this tick must skip
+    silently — return {} and not modify any workbook."""
+    a = _load_assigner(tmp_path)
+    fake_llm = MagicMock()
+    team = _team()
+    team_root = tmp_path / "기획팀"
+    team_root.mkdir()
+    state_path = team_root / "_assignments_state.json"
+    week_dir = team_root / "2026-W18"
+    _create_week_workbooks(week_dir, team)
+
+    # Pre-create a fresh lockfile (simulating an in-progress concurrent assign)
+    lock_path = Path(str(state_path) + ".lock")
+    lock_path.write_text(str(99999), encoding="utf-8")  # bogus pid
+    import os, time
+    # mtime is now → not stale
+    os.utime(lock_path, (time.time(), time.time()))
+
+    rows = [
+        {"일자": "2026-04-22", "지시내용": "task A",
+         "담당파트": "전략기획", "우선순위": "높음", "마감": "2026-04-30", "비고": ""},
+    ]
+    affected = a.run_assign(
+        rows=rows, team=team, week="2026-W18",
+        state_path=state_path, part_xlsx_dir=week_dir,
+        llm=fake_llm, prompt_template_path=PROMPT_PATH,
+    )
+    # Locked tick → no work performed
+    assert affected == {}
+    # Lockfile preserved for the other process
+    assert lock_path.exists()
+    # Part workbook untouched
+    rows_w = list(load_workbook(week_dir / "전략기획.xlsx")["이번주"]
+                  .iter_rows(min_row=2, values_only=True))
+    assert rows_w == []
+
+
+def test_run_assign_recovers_stale_lockfile(tmp_path: Path):
+    """If a previous assign crashed mid-run, its lockfile may linger.
+    Don't deadlock subsequent ticks — recover after the stale threshold."""
+    a = _load_assigner(tmp_path)
+    fake_llm = MagicMock()
+    team = _team()
+    team_root = tmp_path / "기획팀"
+    team_root.mkdir()
+    state_path = team_root / "_assignments_state.json"
+    week_dir = team_root / "2026-W18"
+    _create_week_workbooks(week_dir, team)
+
+    lock_path = Path(str(state_path) + ".lock")
+    lock_path.write_text(str(99999), encoding="utf-8")
+    # Make the lock look 1 day old → stale
+    import os, time
+    one_day_ago = time.time() - 86400
+    os.utime(lock_path, (one_day_ago, one_day_ago))
+
+    rows = [
+        {"일자": "2026-04-22", "지시내용": "task A",
+         "담당파트": "전략기획", "우선순위": "높음", "마감": "2026-04-30", "비고": ""},
+    ]
+    affected = a.run_assign(
+        rows=rows, team=team, week="2026-W18",
+        state_path=state_path, part_xlsx_dir=week_dir,
+        llm=fake_llm, prompt_template_path=PROMPT_PATH,
+    )
+    # Stale lock recovered; assign proceeds normally
+    assert "전략기획" in affected
+    # Lockfile released after run
+    assert not lock_path.exists()
+
+
 def test_run_assign_idempotent_on_second_call(tmp_path: Path):
     a = _load_assigner(tmp_path)
     fake_llm = MagicMock()

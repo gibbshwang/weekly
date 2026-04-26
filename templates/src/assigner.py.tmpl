@@ -14,11 +14,43 @@ independent templates. Defer consolidation until a third consumer appears.
 """
 import hashlib
 import json
+import os
 import re
+import time
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from jinja2 import Template
+
+
+# Stale-lock threshold. If a previous assign crashed and left a lockfile,
+# recover after this many seconds rather than deadlocking subsequent ticks.
+# 600s = 10 min — comfortably longer than a normal assign (LLM call + SMTP)
+# but short enough that an actual crash doesn't block a full hourly cycle.
+_LOCK_STALE_SECONDS = 600
+
+
+def _acquire_lock(lock_path: Path, stale_after: int = _LOCK_STALE_SECONDS) -> Optional[int]:
+    """Atomically create a sidecar lockfile. Returns the open fd on success,
+    None if another active process holds it.
+
+    Stale locks (mtime older than `stale_after`) are removed and the acquire
+    is retried. Cross-platform via os.open with O_CREAT|O_EXCL.
+    """
+    while True:
+        try:
+            return os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        except FileExistsError:
+            try:
+                age = time.time() - os.path.getmtime(str(lock_path))
+            except FileNotFoundError:
+                continue   # lock just released; loop and retry
+            if age < stale_after:
+                return None
+            try:
+                os.unlink(str(lock_path))
+            except FileNotFoundError:
+                pass   # someone else recovered it; loop and retry
 
 try:
     from openpyxl import load_workbook
@@ -294,40 +326,65 @@ def run_assign(
             f"incomplete tasks)."
         )
 
-    seq = next_seq_for_week(part_xlsx_dir, team, week)
-    affected: Dict[str, List[str]] = {}
-    # All previously-processed instructions remain in state. diff_rows
-    # already excluded their keys from new_idx, so nothing is reprocessed.
-    carried = _carry_forward_state(state_path)
-    new_entries: List[Tuple[int, str, str]] = []
-
-    for idx in sorted(new_idx):
-        row = rows[idx]
-        group, part, method = resolve_target_part(
-            row, team=team, llm=llm, prompt_template_path=prompt_template_path,
-        )
-        task_id = generate_task_id(week, seq)
-        seq += 1
-        append_to_part_xlsx(
-            part_xlsx_path=Path(part_xlsx_dir) / f"{part.name}.xlsx",
-            task_id=task_id, row=row, source="지시사항",
-        )
-        affected.setdefault(part.name, []).append(task_id)
-        new_entries.append((idx, part.name, method))
-
-    # Persist carried-forward + newly-assigned. We rebuild the state file in
-    # one shot — the new payload is the union of both.
+    # Sidecar advisory lock so two concurrent assign ticks (overlapping
+    # cron + LLM/SMTP delay) cannot both append to the same part xlsx.
+    # Stale locks recover after _LOCK_STALE_SECONDS so a crashed run
+    # doesn't permanently block the schedule.
     state_path = Path(state_path)
     state_path.parent.mkdir(parents=True, exist_ok=True)
-    payload = {
-        "instructions": [
-            *carried,
-            *[
-                {"instruction_key": _instruction_key(rows[idx]),
-                 "assigned_to": part, "method": method}
-                for idx, part, method in new_entries
-            ],
-        ]
-    }
-    state_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    return affected
+    lock_path = Path(str(state_path) + ".lock")
+    fd = _acquire_lock(lock_path)
+    if fd is None:
+        # Another active assign run holds the lock; skip silently —
+        # the holding process will commit, and the next cron tick will
+        # pick up any further new rows.
+        return {}
+
+    try:
+        try:
+            os.write(fd, str(os.getpid()).encode())
+        finally:
+            os.close(fd)
+
+        seq = next_seq_for_week(part_xlsx_dir, team, week)
+        affected: Dict[str, List[str]] = {}
+        # All previously-processed instructions remain in state. diff_rows
+        # already excluded their keys from new_idx, so nothing is reprocessed.
+        carried = _carry_forward_state(state_path)
+        new_entries: List[Tuple[int, str, str]] = []
+
+        for idx in sorted(new_idx):
+            row = rows[idx]
+            group, part, method = resolve_target_part(
+                row, team=team, llm=llm, prompt_template_path=prompt_template_path,
+            )
+            task_id = generate_task_id(week, seq)
+            seq += 1
+            append_to_part_xlsx(
+                part_xlsx_path=Path(part_xlsx_dir) / f"{part.name}.xlsx",
+                task_id=task_id, row=row, source="지시사항",
+            )
+            affected.setdefault(part.name, []).append(task_id)
+            new_entries.append((idx, part.name, method))
+
+        # Persist carried-forward + newly-assigned. We rebuild the state file in
+        # one shot — the new payload is the union of both.
+        payload = {
+            "instructions": [
+                *carried,
+                *[
+                    {"instruction_key": _instruction_key(rows[idx]),
+                     "assigned_to": part, "method": method}
+                    for idx, part, method in new_entries
+                ],
+            ]
+        }
+        state_path.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        return affected
+    finally:
+        try:
+            os.unlink(str(lock_path))
+        except FileNotFoundError:
+            pass
