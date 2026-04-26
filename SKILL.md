@@ -14,7 +14,7 @@ description: Weekly Report Automation Harness — end-to-end automation for team
 ## AI 채널 제약 (사용자 결정 2026-04-25)
 
 PRD §1.2의 "사전 승인 AI CLI 채널만" 제약을 충실히 따른다:
-- **AI가 사용되는 모든 호출은 Codex CLI 또는 Gemini CLI subprocess로 처리** (`codex exec` / `gemini -p`)
+- **AI가 사용되는 모든 호출은 Codex CLI 또는 Gemini CLI subprocess로 처리** (`codex exec` / `gemini` — prompt는 argv 아닌 stdin으로 전달, PII 노출 방지)
 - 외부 AI API(anthropic/openai/google-generativeai SDK 등) 사용 금지 — 보안정책상 차단됨
 - 비-AI 작업(SMTP 발송, Jinja2 HTML 렌더링, openpyxl xlsx 처리)은 일반 Python 라이브러리 사용
 
@@ -62,7 +62,8 @@ PRD §1.2의 "사전 승인 AI CLI 채널만" 제약을 충실히 따른다:
 
 ```
 cd ~/weekly/<팀>
-.venv/Scripts/wreport compile <팀> --week=2026-W18
+venv/Scripts/wreport compile <팀> --week=2026-W18    # Windows
+venv/bin/wreport     compile <팀> --week=2026-W18    # Unix
 ```
 
 `wreport schedule install <팀>` 등록 후에는 cron이 prepare/assign/compile을 자동 실행한다.
