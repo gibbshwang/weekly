@@ -1,0 +1,205 @@
+"""Phase 2 weekly initialization (Wave A.4).
+
+Invoked by `wreport prepare <팀명>` (typically a Monday-morning cron job)
+to set up the new weekly cycle:
+
+  1. Create the week folder under <storage_root>/<team>/<week>/
+  2. Generate one part workbook (xlsx) per (group, part) pair
+  3. If a previous week exists:
+     - Move 완료/취소 rows from prev week's 이번주 + 지난주 sheets into
+       prev week's 지난주_완료 archive sheet
+     - Copy the remaining (incomplete) rows into the new week's 지난주
+       sheet, rewriting 출처 to "이월" so downstream consumers can tell
+       carry-forward apart from native this-week items
+  4. Original 업무ID is preserved across carry-forward, so a row created
+     as W17-005 stays "W17-005" forever and can be tracked across weeks.
+
+Idempotent: running twice for the same week does not duplicate rows.
+"""
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any, Iterable, List, Optional
+
+from openpyxl import load_workbook
+
+# These imports point at the project's own runtime helpers — but since this
+# template runs both inside the scaffolded project AND from the harness test
+# suite, the imports degrade to the harness-side equivalents when the project
+# package is not on sys.path.
+try:
+    from weekly_runtime.xlsx_template import (
+        generate_part_xlsx,
+        PART_SHEET_HEADERS,
+    )
+except ImportError:  # pragma: no cover — exercised by harness tests
+    from scripts.xlsx_template import (
+        generate_part_xlsx,
+        PART_SHEET_HEADERS,
+    )
+
+
+# Anything not in this set is "still in flight" and must be carried forward.
+# Using a small whitelist (rather than blacklisting "incomplete" states) means
+# new states added later default to safe carry-forward behavior.
+_ARCHIVED_STATES = {"완료", "취소"}
+
+_ID_COL = 0          # 업무ID
+_SOURCE_COL = 1      # 출처
+_STATE_COL = 3       # 상태
+
+
+def _row_dict(row: tuple) -> dict:
+    """Map a sheet row tuple to {header: value}. Missing trailing cells = None."""
+    out = {}
+    for i, header in enumerate(PART_SHEET_HEADERS):
+        out[header] = row[i] if i < len(row) else None
+    return out
+
+
+def _read_data_rows(ws) -> List[dict]:
+    """Return [{header: value}] for every populated row past the header.
+
+    A row is "populated" if its 업무ID column is truthy. openpyxl preserves
+    whitespace-only / fully-empty trailing rows that we want to skip.
+    """
+    out = []
+    for row in ws.iter_rows(min_row=2, values_only=True):
+        if not row or row[_ID_COL] in (None, ""):
+            continue
+        out.append(_row_dict(row))
+    return out
+
+
+def _existing_ids(ws) -> set:
+    """업무ID values currently in a sheet (used for idempotency dedupe)."""
+    return {r[_ID_COL] for r in ws.iter_rows(min_row=2, values_only=True)
+            if r and r[_ID_COL] not in (None, "")}
+
+
+def _append_rows(ws, rows: Iterable[dict], header_overrides: Optional[dict] = None) -> None:
+    """Append dict-shaped rows to a sheet, with optional per-row header overrides
+    (e.g., set 출처 to '이월' on every carry-forward row)."""
+    overrides = header_overrides or {}
+    for r in rows:
+        merged = {**r, **overrides}
+        ws.append([merged.get(h, "") for h in PART_SHEET_HEADERS])
+
+
+def _delete_data_rows(ws) -> None:
+    """Wipe everything below the header row."""
+    if ws.max_row > 1:
+        ws.delete_rows(2, ws.max_row - 1)
+
+
+def _split_completed(rows: List[dict]) -> tuple[List[dict], List[dict]]:
+    archived, kept = [], []
+    for r in rows:
+        if r.get("상태") in _ARCHIVED_STATES:
+            archived.append(r)
+        else:
+            kept.append(r)
+    return archived, kept
+
+
+def _process_prev_week_part(prev_xlsx: Path, new_xlsx: Path) -> tuple[int, int]:
+    """Triage prev_xlsx and write archive/carry-forward into new_xlsx.
+
+    Returns (archived_count, carried_count).
+
+    Behavior:
+      - prev week's 이번주 / 지난주: 완료/취소 rows are MOVED to 지난주_완료
+        (still in the prev week's file — the prev week becomes a snapshot
+        of what happened); incomplete rows STAY in their original sheet.
+      - new week's 지난주: COPY of every prev-week incomplete row, with
+        출처 stamped as "이월" so consumers can tell carry-forward apart.
+    """
+    wb_prev = load_workbook(prev_xlsx)
+    this_week = wb_prev["이번주"]
+    last_week = wb_prev["지난주"]
+    archive = wb_prev["지난주_완료"]
+
+    # Read each sheet independently so we can preserve which sheet a kept row
+    # came from when re-writing.
+    this_week_rows = _read_data_rows(this_week)
+    last_week_rows = _read_data_rows(last_week)
+
+    this_archived, this_kept = _split_completed(this_week_rows)
+    last_archived, last_kept = _split_completed(last_week_rows)
+    all_archived = this_archived + last_archived
+    all_kept = this_kept + last_kept
+
+    # Archive: dedup by 업무ID so reruns don't double-add.
+    archived_existing = _existing_ids(archive)
+    new_archived_rows = [r for r in all_archived if r[_row_id_key()] not in archived_existing]
+    _append_rows(archive, new_archived_rows)
+
+    # Rewrite each active sheet to its kept rows only (preserves whichever
+    # sheet the row originally lived in).
+    _delete_data_rows(this_week)
+    _append_rows(this_week, this_kept)
+    _delete_data_rows(last_week)
+    _append_rows(last_week, last_kept)
+    wb_prev.save(prev_xlsx)
+
+    # Carry to new week's 지난주: every kept row, dedup'd by 업무ID, with
+    # 출처 = "이월".
+    wb_new = load_workbook(new_xlsx)
+    new_last = wb_new["지난주"]
+    new_existing = _existing_ids(new_last)
+    fresh = [r for r in all_kept if r[_row_id_key()] not in new_existing]
+    _append_rows(new_last, fresh, header_overrides={"출처": "이월"})
+    wb_new.save(new_xlsx)
+    return len(new_archived_rows), len(fresh)
+
+
+def _row_id_key() -> str:
+    return PART_SHEET_HEADERS[_ID_COL]
+
+
+def prepare_new_week(
+    storage_root: Path,
+    team: Any,
+    current_week: str,
+    prev_week: Optional[str] = None,
+) -> dict:
+    """Create the new week folder, generate part workbooks, and carry forward.
+
+    `team` is duck-typed (Pydantic Team or any object exposing .name and
+    iter_parts() yielding (group, part) pairs).
+    """
+    storage_root = Path(storage_root)
+    week_dir = storage_root / team.name / current_week
+    week_dir.mkdir(parents=True, exist_ok=True)
+
+    created: List[str] = []
+    for group, part in team.iter_parts():
+        out = week_dir / f"{part.name}.xlsx"
+        if not out.exists():
+            generate_part_xlsx(
+                out_path=out, team_name=team.name,
+                group_name=group.name, part_name=part.name,
+                week=current_week,
+            )
+        created.append(part.name)
+
+    archived_total = 0
+    carried_total = 0
+    if prev_week:
+        prev_dir = storage_root / team.name / prev_week
+        for _, part in team.iter_parts():
+            prev_xlsx = prev_dir / f"{part.name}.xlsx"
+            new_xlsx = week_dir / f"{part.name}.xlsx"
+            if not prev_xlsx.exists():
+                # No history for this part — first run for it. Skip silently.
+                continue
+            a, c = _process_prev_week_part(prev_xlsx, new_xlsx)
+            archived_total += a
+            carried_total += c
+
+    return {
+        "week_dir": str(week_dir),
+        "created": created,
+        "archived": archived_total,
+        "carried": carried_total,
+    }
