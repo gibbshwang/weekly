@@ -74,3 +74,50 @@ def test_cli_phase0_compile_still_works():
     text = _cli_text()
     assert '@cli.command("compile")' in text
     assert "def compile_cmd" in text
+
+
+# --- Phase 2 (Wave A.5): wreport prepare subcommand ---
+
+
+def test_cli_exposes_prepare_command():
+    text = _cli_text()
+    assert '@cli.command("prepare")' in text
+    assert "def prepare_cmd" in text
+
+
+def test_cli_prepare_imports_prepare_module():
+    text = _cli_text()
+    assert "from .prepare import" in text
+    assert "prepare_new_week" in text
+
+
+def test_cli_prepare_takes_team_argument():
+    """`wreport prepare <팀명>` matches the agreed CLI shape (E1 — 팀 단위)."""
+    text = _cli_text()
+    # Locate the prepare_cmd block
+    assert '@cli.command("prepare")' in text
+    # Argument named team (or similar) — the click decorator uses click.argument
+    # for the positional. We assert the command body references the team config.
+    assert "cfg.team" in text
+
+
+def test_cli_prepare_supports_week_and_prev_week_overrides():
+    """For manual triggers / testing: --week and --prev-week options."""
+    text = _cli_text()
+    assert "--week" in text  # already in compile/assign
+    assert "--prev-week" in text
+
+
+def test_cli_prepare_invokes_prepare_new_week():
+    text = _cli_text()
+    assert "prepare_new_week(" in text
+
+
+def test_cli_prepare_fails_clearly_when_team_missing():
+    """Phase 2 prepare requires cfg.team (Phase 2 form). Legacy `department`-
+    only configs must produce a clear error rather than crash."""
+    text = _cli_text()
+    # The prepare_cmd should check cfg.team and exit with a useful message
+    # (rather than letting an AttributeError bubble out as a stack trace).
+    # We sanity-check that the message mentions `team` somewhere in the file.
+    assert "cfg.team is None" in text or "cfg.team:" in text or "if not cfg.team" in text
