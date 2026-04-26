@@ -50,3 +50,29 @@ def render_dashboard(
         generated_at=datetime.now().isoformat(timespec="seconds"),
         weekly_version=weekly_version,
     )
+
+
+def render_dashboard_v2(
+    result: Dict[str, Any],
+    team_name: str,
+    week: str,
+    template_path: Path,
+    weekly_version: str = "0.2.0",
+) -> str:
+    """Phase 2 dashboard renderer — task-centric schema (지난주/이번주 + 그룹별).
+
+    Same Jinja2 Environment + autoescape + nl2br protections as v1
+    (FIX-01); the v2 template just consumes the new top-level keys
+    (`팀_종합_요약`, `지난주.항목`, `이번주.항목`, `그룹별_요약`,
+    `그룹장_확인필요`) instead of `부서_종합_요약` / `파트별_핵심`.
+    """
+    template_path = Path(template_path)
+    env = _build_env(template_path.parent)
+    tmpl = env.get_template(template_path.name)
+    return tmpl.render(
+        result=result,
+        team_name=team_name,
+        week=week,
+        generated_at=datetime.now().isoformat(timespec="seconds"),
+        weekly_version=weekly_version,
+    )
