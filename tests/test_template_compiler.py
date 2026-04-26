@@ -120,6 +120,81 @@ def test_collect_parts_marks_missing_workbook(tmp_path: Path):
         assert p_data["지난주"] == []
 
 
+def test_collect_parts_includes_manual_row_without_업무ID(tmp_path: Path):
+    """Regression: 출처 dropdown includes '파트작성' — part leads are
+    expected to add their own rows for self-initiated tasks. Those rows
+    have no auto-generated 업무ID. Old code skipped them on `not raw[0]`
+    so compile never saw them, even though status (which checks user-input
+    columns) would mark the part as written. Operational inconsistency.
+
+    Fix: rows with content in any column past 업무ID are kept; compile
+    synthesizes a stable placeholder ID per row for downstream identity."""
+    compiler = _load_compiler(tmp_path)
+    team = _team()
+    week_dir = tmp_path / "2026-W18"
+    _seed_part_xlsx(
+        week_dir, team, "전략기획",
+        이번주_rows=[
+            {
+                "업무ID": "",   # ← part lead's manual row, no auto ID
+                "출처": "파트작성",
+                "업무_지시내용": "내부 KPI 대시보드 개선",
+                "상태": "진행중", "이번주_처리결과": "초안 작성",
+                "마감": "2026-04-30", "우선순위": "보통",
+            },
+            {
+                "업무ID": "W18-001",  # auto-assigned row
+                "출처": "지시사항",
+                "업무_지시내용": "정상 task",
+                "상태": "진행중",
+                "마감": "2026-04-30", "우선순위": "높음",
+            },
+        ],
+    )
+    parts_data = compiler.collect_parts(week_dir, team)
+    rows = parts_data["전략기획"]["이번주"]
+    assert len(rows) == 2, (
+        f"manual row (no 업무ID) was dropped — got {len(rows)} rows: {rows!r}"
+    )
+    # Both rows present; the manual one gets a synthetic ID so downstream
+    # consumers (LLM prompt + dashboard) can reference it.
+    ids = [r["업무ID"] for r in rows]
+    assert "W18-001" in ids
+    manual_ids = [i for i in ids if i != "W18-001"]
+    assert len(manual_ids) == 1
+    assert manual_ids[0], "manual row must get a non-empty synthetic ID"
+    # Synthetic ID should hint at the source so it's distinguishable
+    # from auto-assigned 업무ID format
+    assert "W18-001" not in manual_ids
+
+
+def test_collect_parts_drops_truly_empty_rows(tmp_path: Path):
+    """Don't go too far the other way: a row with no content in any
+    column should still be skipped (those are openpyxl artifacts from
+    cleared cells)."""
+    compiler = _load_compiler(tmp_path)
+    team = _team()
+    week_dir = tmp_path / "2026-W18"
+    _seed_part_xlsx(
+        week_dir, team, "전략기획",
+        이번주_rows=[
+            {
+                "업무ID": "W18-001",
+                "출처": "지시사항", "업무_지시내용": "real task",
+                "상태": "진행중", "마감": "2026-04-30", "우선순위": "높음",
+            },
+            # entirely-empty row — should NOT appear in collected output
+            {h: "" for h in [
+                "업무ID", "출처", "업무_지시내용", "상태",
+                "이번주_처리결과", "이슈_장애", "리스크_지원요청",
+                "다음액션_차주계획", "마감", "우선순위", "비고",
+            ]},
+        ],
+    )
+    parts_data = compiler.collect_parts(week_dir, team)
+    assert len(parts_data["전략기획"]["이번주"]) == 1
+
+
 def test_collect_parts_marks_empty_workbook_as_미작성(tmp_path: Path):
     """A part workbook that exists but has zero data rows in 이번주 + 지난주
     counts as 미작성 — the part lead never opened it."""

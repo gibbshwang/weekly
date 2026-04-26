@@ -72,22 +72,32 @@ def _strip_code_fence(text: str) -> str:
 def _read_part_workbook(part_xlsx_path: Path) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     """Return (이번주_rows, 지난주_rows) as lists of header→value dicts.
 
-    A row is "data" if its 업무ID column is non-empty (matches the
-    convention used by prepare/assigner). 지난주_완료 is intentionally
-    NOT read — completed items are out of scope for this week's compile.
+    A row is "data" if it has content in any cell. Rows with no 업무ID but
+    other columns filled (e.g. 출처=파트작성, 지시내용=…) are part-lead
+    self-initiated tasks — keep them and synthesize a placeholder ID so
+    downstream consumers (LLM prompt + dashboard) can reference them.
+    Truly empty rows (cleared cells, openpyxl artifacts) are still skipped.
+    지난주_완료 is intentionally NOT read — out of scope for this week's compile.
     """
     wb = load_workbook(part_xlsx_path)
     out: Dict[str, List[Dict[str, Any]]] = {"이번주": [], "지난주": []}
+    part_label = Path(part_xlsx_path).stem  # e.g. "전략기획"
     for sheet_name in ("이번주", "지난주"):
         if sheet_name not in wb.sheetnames:
             continue
+        manual_seq = 1
         for raw in wb[sheet_name].iter_rows(min_row=2, values_only=True):
-            if not raw or not raw[0]:
+            if not raw or all(v in (None, "") for v in raw):
                 continue
             row: Dict[str, Any] = {}
             for i, h in enumerate(PART_SHEET_HEADERS):
                 v = raw[i] if i < len(raw) else None
                 row[h] = "" if v is None else str(v)
+            if not row.get("업무ID"):
+                # Synthesize a stable, human-readable placeholder so the
+                # LLM and dashboard have something to anchor on.
+                row["업무ID"] = f"MANUAL-{part_label}-{sheet_name}-{manual_seq:03d}"
+                manual_seq += 1
             out[sheet_name].append(row)
     return out["이번주"], out["지난주"]
 
