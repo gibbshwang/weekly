@@ -42,9 +42,11 @@ def test_codex_call_invokes_subprocess():
     cmd = run.call_args[0][0]
     assert cmd[0] == "codex"
     assert cmd[1] == "exec"
-    full = " ".join(cmd)
-    assert "You are a helper" in full
-    assert "What is 2+2?" in full
+    # Prompt now travels via stdin (FIX-06), not argv. Verify both system and
+    # user content land in the input= kwarg the subprocess sees on stdin.
+    stdin_payload = run.call_args.kwargs.get("input") or ""
+    assert "You are a helper" in stdin_payload
+    assert "What is 2+2?" in stdin_payload
 
 
 def test_gemini_call_invokes_subprocess():
@@ -114,3 +116,64 @@ def test_stdout_at_limit_passes():
         result = client.call(system="x", user="y")
     # .strip() only removes whitespace, body should remain intact
     assert len(result) == MAX_STDOUT
+
+
+# --- Prompt-not-in-argv hardening (FIX-06) ---
+
+_SECRET_MARKER = "TOP-SECRET-PROMPT-CONTENT-12345"
+
+
+def test_codex_prompt_not_in_argv():
+    """Codex prompt content must reach the subprocess via stdin, never as argv.
+
+    Argv is visible in `ps aux` / Windows `tasklist` to other users on the host
+    and is captured by EDR / audit tooling, so any PII in the weekly report
+    body would leak there. Pass via stdin instead.
+    """
+    fake_result = MagicMock(returncode=0, stdout="ok", stderr="")
+    with patch("scripts.lib.llm_call.shutil.which", return_value="/fake/codex"), \
+         patch("scripts.lib.llm_call.subprocess.run", return_value=fake_result) as run:
+        client = LLMClient(provider="codex")
+        client.call(system=_SECRET_MARKER, user="hello")
+
+    cmd = run.call_args[0][0]
+    assert _SECRET_MARKER not in " ".join(cmd), (
+        f"Secret prompt leaked into argv: {cmd!r}"
+    )
+    stdin_payload = run.call_args.kwargs.get("input")
+    assert stdin_payload is not None, "subprocess.run was not given input= for stdin"
+    assert _SECRET_MARKER in stdin_payload, (
+        f"Prompt content not delivered via stdin: input={stdin_payload!r}"
+    )
+
+
+def test_gemini_prompt_not_in_argv():
+    """Same security requirement as codex: prompt body must not appear in argv."""
+    fake_result = MagicMock(returncode=0, stdout="ok", stderr="")
+    with patch("scripts.lib.llm_call.shutil.which", return_value="/fake/gemini"), \
+         patch("scripts.lib.llm_call.subprocess.run", return_value=fake_result) as run:
+        client = LLMClient(provider="gemini")
+        client.call(system=_SECRET_MARKER, user="hello")
+
+    cmd = run.call_args[0][0]
+    assert _SECRET_MARKER not in " ".join(cmd), (
+        f"Secret prompt leaked into argv: {cmd!r}"
+    )
+    stdin_payload = run.call_args.kwargs.get("input")
+    assert stdin_payload is not None, "subprocess.run was not given input= for stdin"
+    assert _SECRET_MARKER in stdin_payload, (
+        f"Prompt content not delivered via stdin: input={stdin_payload!r}"
+    )
+
+
+def test_codex_argv_still_includes_invocation_metadata():
+    """Even with prompt on stdin, argv must still hold the invocation
+    pieces (binary, subcommand, model flag) so the CLI knows what to run."""
+    fake_result = MagicMock(returncode=0, stdout="ok", stderr="")
+    with patch("scripts.lib.llm_call.shutil.which", return_value="/fake/codex"), \
+         patch("scripts.lib.llm_call.subprocess.run", return_value=fake_result) as run:
+        client = LLMClient(provider="codex", model="gpt-5")
+        client.call(system="x", user="y")
+    cmd = run.call_args[0][0]
+    assert cmd[:2] == ["codex", "exec"]
+    assert "--model" in cmd and "gpt-5" in cmd
