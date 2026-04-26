@@ -369,6 +369,79 @@ def test_run_compile_normalizes_missing_keys(tmp_path: Path):
     assert result["주의사항"] == []
 
 
+def test_run_compile_normalizes_nested_item_fields(tmp_path: Path):
+    """Defense-in-depth: 지난주.항목[*] / 이번주.항목[*] / 그룹장_확인필요[*]
+    each have list-typed sub-fields the dashboard iterates over (Jinja
+    {% for %}). If the LLM returns a string where a list was specified,
+    or omits a field entirely, normalize each element so downstream render
+    cannot fail."""
+    compiler = _load_compiler(tmp_path)
+    fake_llm = MagicMock()
+    fake_llm.call.return_value = json.dumps({
+        "팀_종합_요약": "ok",
+        "지난주": {
+            "요약": "",
+            "항목": [
+                {
+                    "그룹": "g1", "파트": "p1", "업무ID": "W17-001",
+                    "업무": "...", "상태": "지연",
+                    # WRONG TYPES: string instead of list, missing fields
+                    "이번주_처리결과": "draft",
+                    "이슈": None,
+                    # 리스크_지원요청 / 다음액션 / 마감 / 우선순위 omitted
+                },
+                "completely-not-a-dict",
+            ],
+        },
+        "이번주": {"요약": "", "항목": []},
+        "그룹별_요약": {
+            "사업그룹": {"상태": "주의", "요약": "ok"},
+            "운영그룹": "should-be-dict",  # wrong type
+            42: {"상태": "정상"},  # non-string key — drop
+        },
+        "그룹장_확인필요": [
+            {"그룹": "g", "파트": "p", "업무ID": "W18-005",
+             "내용": "지원 요청", "희망기한": "2026-04-30"},
+            "not-a-dict",
+        ],
+        "미작성_파트": ["전략기획", 42, None],  # wrong types in list
+        "주의사항": ["정상", {"this": "is wrong"}],
+    }, ensure_ascii=False)
+    result = compiler.run_compile(
+        llm=fake_llm, team=_team(), week="2026-W18",
+        parts_data={}, prompt_template_path=PROMPT_PATH,
+    )
+    last_items = result["지난주"]["항목"]
+    assert len(last_items) == 2
+    item0 = last_items[0]
+    # Wrong-typed `이번주_처리결과` coerced to []
+    assert item0["이번주_처리결과"] == []
+    assert item0["이슈"] == []
+    # Missing fields filled with defaults
+    assert item0["리스크_지원요청"] == []
+    assert item0["다음액션"] == []
+    assert item0["마감"] == ""
+    assert item0["우선순위"] == ""
+    # Non-dict element coerced to empty dict shape
+    assert last_items[1] == {
+        "그룹": "", "파트": "", "업무ID": "", "업무": "", "상태": "",
+        "이번주_처리결과": [], "이슈": [], "리스크_지원요청": [],
+        "다음액션": [], "마감": "", "우선순위": "",
+    }
+    # 그룹별_요약: only string-keyed entries kept; non-dict value defaulted
+    assert "사업그룹" in result["그룹별_요약"]
+    assert result["그룹별_요약"]["운영그룹"] == {"상태": "", "요약": ""}
+    assert 42 not in result["그룹별_요약"]
+    # 그룹장_확인필요: non-dict becomes empty-shaped dict
+    assert result["그룹장_확인필요"][1] == {
+        "그룹": "", "파트": "", "업무ID": "", "내용": "", "희망기한": "",
+    }
+    # 미작성_파트: every element coerced to string
+    assert all(isinstance(p, str) for p in result["미작성_파트"])
+    # 주의사항: dict element coerced to ""
+    assert result["주의사항"][1] == ""
+
+
 def test_run_compile_coerces_wrong_types_to_defaults(tmp_path: Path):
     """If LLM returns a string where a list was specified, normalize to []."""
     compiler = _load_compiler(tmp_path)
