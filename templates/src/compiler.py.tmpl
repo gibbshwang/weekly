@@ -3,12 +3,28 @@
 The LLM is invoked via subprocess (Codex CLI or Gemini CLI). The system
 prompt enforces JSON output. We tolerate occasional markdown code-fence
 wrapping and strip it before json.loads.
+
+Phase 2 (Wave C) adds:
+- collect_parts_v2(week_dir, team)  — reads xlsx 지난주 + 이번주 sheets
+- run_compile_v2(llm, team, week, parts_data, prompt_template_path)
+                                   — feeds the LLM the new task-centric
+                                     schema (지난주 / 이번주 항목 arrays
+                                     + 그룹별 요약 + 그룹장_확인필요)
+
+Legacy md-based path stays for the transition; CLI migrates in Wave E.
 """
 import json
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 from jinja2 import Template
+
+try:
+    from openpyxl import load_workbook
+    from weekly_runtime.xlsx_template import PART_SHEET_HEADERS
+except ImportError:  # pragma: no cover — exercised by harness tests
+    from openpyxl import load_workbook
+    from scripts.xlsx_template import PART_SHEET_HEADERS
 
 
 def collect_parts(
@@ -64,5 +80,135 @@ def run_compile(
         else:
             user_lines.append("(미작성)")
     user_prompt = "\n".join(user_lines)
+    raw = llm.call(sys_prompt, user_prompt)
+    return json.loads(_strip_code_fence(raw))
+
+
+# --- Phase 2 (Wave C): xlsx-based collect + new schema run_compile ---
+
+
+def _read_part_workbook(part_xlsx_path: Path) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """Return (이번주_rows, 지난주_rows) as lists of header→value dicts.
+
+    A row is "data" if its 업무ID column is non-empty (matches the
+    convention used by prepare/assigner). 지난주_완료 is intentionally
+    NOT read — completed items are out of scope for this week's compile.
+    """
+    wb = load_workbook(part_xlsx_path)
+    out: Dict[str, List[Dict[str, Any]]] = {"이번주": [], "지난주": []}
+    for sheet_name in ("이번주", "지난주"):
+        if sheet_name not in wb.sheetnames:
+            continue
+        for raw in wb[sheet_name].iter_rows(min_row=2, values_only=True):
+            if not raw or not raw[0]:
+                continue
+            row: Dict[str, Any] = {}
+            for i, h in enumerate(PART_SHEET_HEADERS):
+                v = raw[i] if i < len(raw) else None
+                row[h] = "" if v is None else str(v)
+            out[sheet_name].append(row)
+    return out["이번주"], out["지난주"]
+
+
+def collect_parts_v2(week_dir: Path, team) -> Dict[str, Dict[str, Any]]:
+    """For each (group, part) in `team`, read its xlsx and return:
+
+      {part_name: {"group": <group_name>,
+                   "이번주": [row_dict, ...],
+                   "지난주": [row_dict, ...],
+                   "미작성": bool}}
+
+    A part is considered 미작성 when its workbook is missing OR both
+    sheets have zero data rows.
+    """
+    week_dir = Path(week_dir)
+    out: Dict[str, Dict[str, Any]] = {}
+    for group, part in team.iter_parts():
+        path = week_dir / f"{part.name}.xlsx"
+        if not path.exists():
+            out[part.name] = {
+                "group": group.name, "미작성": True,
+                "이번주": [], "지난주": [],
+            }
+            continue
+        this_week_rows, last_week_rows = _read_part_workbook(path)
+        out[part.name] = {
+            "group": group.name,
+            "이번주": this_week_rows,
+            "지난주": last_week_rows,
+            "미작성": (not this_week_rows) and (not last_week_rows),
+        }
+    return out
+
+
+def _format_row_for_llm(row: Dict[str, Any]) -> str:
+    """Pretty-print one task row for the user prompt."""
+    bullets = []
+    for k in ("이번주_처리결과", "이슈_장애", "리스크_지원요청", "다음액션_차주계획"):
+        if row.get(k):
+            bullets.append(f"  {k.replace('_', '/')}: {row[k]}")
+    head = (
+        f"- {row.get('업무ID', '')} "
+        f"[{row.get('상태', '') or '미입력'}] "
+        f"({row.get('출처', '') or '-'}) "
+        f"{row.get('업무_지시내용', '')}"
+    )
+    tail = (
+        f"  마감: {row.get('마감', '') or '-'} | "
+        f"우선순위: {row.get('우선순위', '') or '-'}"
+    )
+    return "\n".join([head, *bullets, tail])
+
+
+def _build_user_prompt_v2(team_name: str, week: str, parts_data: Dict[str, Dict[str, Any]]) -> str:
+    """Render the structured Korean text payload the v2 prompt expects."""
+    lines = [f"## 팀: {team_name} | 주차: {week}", ""]
+    # Group parts by their .group field so the model sees the org structure.
+    by_group: Dict[str, List[Tuple[str, Dict[str, Any]]]] = {}
+    for part_name, data in parts_data.items():
+        by_group.setdefault(data.get("group", "(미지정)"), []).append((part_name, data))
+
+    for group_name, parts in by_group.items():
+        lines.append(f"### 그룹: {group_name}")
+        for part_name, data in parts:
+            lines.append(f"파트: {part_name}")
+            if data.get("미작성"):
+                lines.append("(미작성)")
+                lines.append("")
+                continue
+            lines.append("[지난주]")
+            if data["지난주"]:
+                for r in data["지난주"]:
+                    lines.append(_format_row_for_llm(r))
+            else:
+                lines.append("(없음)")
+            lines.append("[이번주]")
+            if data["이번주"]:
+                for r in data["이번주"]:
+                    lines.append(_format_row_for_llm(r))
+            else:
+                lines.append("(없음)")
+            lines.append("")
+    return "\n".join(lines)
+
+
+def run_compile_v2(
+    llm,
+    team,
+    week: str,
+    parts_data: Dict[str, Dict[str, Any]],
+    prompt_template_path: Path,
+) -> Dict[str, Any]:
+    """Phase 2 compile pass. Returns parsed JSON dict matching the v2 schema."""
+    groups_for_prompt = [
+        {"name": g.name, "parts": [p.name for p in g.parts]}
+        for g in team.groups
+    ]
+    sys_prompt = Template(Path(prompt_template_path).read_text(encoding="utf-8")).render(
+        team_name=team.name,
+        groups=groups_for_prompt,
+        week=week,
+    )
+    user_prompt = _build_user_prompt_v2(team.name, week, parts_data)
     raw = llm.call(sys_prompt, user_prompt)
     return json.loads(_strip_code_fence(raw))
