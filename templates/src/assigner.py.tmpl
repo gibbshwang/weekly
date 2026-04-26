@@ -268,10 +268,31 @@ def run_assign(
     Returns `{part_name: [task_id, ...]}` of parts touched this tick.
     Idempotent on instruction_key: re-running with the same rows yields no
     new appends.
+
+    Raises FileNotFoundError with an actionable message when the week's
+    part workbooks do not exist yet (i.e. `wreport prepare <팀>` was
+    skipped). The cron stack runs prepare on Monday morning before assign,
+    but a fresh setup or manual first-run can hit this case.
     """
     new_idx = diff_rows(rows, state_path)
     if not new_idx:
         return {}
+
+    # Prepare prerequisite: every part needs its xlsx workbook to exist.
+    # Fail fast with a clear message rather than letting load_workbook raise
+    # a generic FileNotFoundError mid-loop.
+    week_dir_path = Path(part_xlsx_dir)
+    missing = [
+        p.name for _, p in team.iter_parts()
+        if not (week_dir_path / f"{p.name}.xlsx").exists()
+    ]
+    if missing:
+        raise FileNotFoundError(
+            f"part workbooks missing for week {week!r}: {missing!r}. "
+            f"Run `wreport prepare {team.name} --week={week}` first to create "
+            f"the per-part xlsx files (and carry-forward any prior week's "
+            f"incomplete tasks)."
+        )
 
     seq = next_seq_for_week(part_xlsx_dir, team, week)
     affected: Dict[str, List[str]] = {}
