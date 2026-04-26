@@ -2,12 +2,13 @@
 
 Phase 0 commands: init (stub), compile (end-to-end).
 Phase 1 commands: assign, status, schedule install/uninstall/status.
+Phase 2 commands: prepare (new-week initialization with carry-forward).
 
 AI calls go through Codex CLI or Gemini CLI subprocess (no API keys).
 SMTP password is loaded from OS keyring at compile time.
 """
 import sys
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
@@ -25,6 +26,7 @@ from .status import compute_status, format_status_report
 from .scheduler import install_task, uninstall_task, list_tasks
 from .audit import log_event
 from .excel import read_instructions
+from .prepare import prepare_new_week
 
 
 @click.group()
@@ -138,6 +140,68 @@ def compile_cmd(dept: str, week_str: Optional[str], config_path: Optional[Path],
 def _current_iso_week() -> str:
     iso_year, iso_week, _ = date.today().isocalendar()
     return f"{iso_year}-W{iso_week:02d}"
+
+
+def _previous_iso_week() -> str:
+    prev = date.today() - timedelta(days=7)
+    iso_year, iso_week, _ = prev.isocalendar()
+    return f"{iso_year}-W{iso_week:02d}"
+
+
+@cli.command("prepare")
+@click.argument("team", type=str)
+@click.option("--config", "config_path", type=click.Path(path_type=Path), default=None,
+              help="Path to config.yaml. Defaults to ./config.yaml from the project root.")
+@click.option("--week", "week_str", type=str, default=None,
+              help="Target ISO week (e.g. 2026-W18). Defaults to current ISO week.")
+@click.option("--prev-week", "prev_week_str", type=str, default=None,
+              help="Previous ISO week to carry-forward from. "
+                   "Defaults to current_week - 7d. Pass empty string for first-week setup.")
+def prepare_cmd(team: str, config_path: Optional[Path],
+                week_str: Optional[str], prev_week_str: Optional[str]) -> None:
+    """Phase 2 — initialize a new weekly cycle with carry-forward.
+
+    Run on Monday morning (cron). Creates the week folder, generates a
+    workbook for every (group, part) pair, and carries forward incomplete
+    items from the previous week's part workbooks.
+    """
+    cfg = _load_cfg(config_path)
+    if cfg.team is None:
+        click.echo(
+            "ERROR: `wreport prepare` requires the Phase 2 `team` block in config.yaml. "
+            "Legacy `department` configs must migrate to `team` first.",
+            err=True,
+        )
+        sys.exit(2)
+    if cfg.team.name != team:
+        click.echo(
+            f"WARN: team arg '{team}' != config.team.name '{cfg.team.name}'", err=True,
+        )
+
+    week = week_str or _current_iso_week()
+    # Empty string from --prev-week explicitly opts out of carry-forward
+    # (used for the first-ever week of a new team). None means "default to
+    # current_week - 7d".
+    if prev_week_str == "":
+        prev_week: Optional[str] = None
+    elif prev_week_str is None:
+        prev_week = _previous_iso_week()
+    else:
+        prev_week = prev_week_str
+
+    storage_root = Path(cfg.storage.root)
+    summary = prepare_new_week(
+        storage_root=storage_root,
+        team=cfg.team,
+        current_week=week,
+        prev_week=prev_week,
+    )
+    click.echo(
+        f"Prepared {cfg.team.name} {week}: "
+        f"{len(summary['created'])} part workbooks, "
+        f"{summary['archived']} archived, {summary['carried']} carried forward."
+    )
+    click.echo(f"  → {summary['week_dir']}")
 
 
 def _load_cfg(config_path):
