@@ -29,7 +29,7 @@ def test_install_windows_invokes_schtasks(tmp_path: Path, monkeypatch):
         s.install_task(
             name="weekly-기획팀-assign",
             cron="0 * * * *",
-            command=r"C:\weekly\기획팀\venv\Scripts\wreport.exe assign 기획팀",
+            argv=[r"C:\weekly\기획팀\venv\Scripts\wreport.exe", "assign", "기획팀"],
             working_dir=r"C:\weekly\기획팀",
         )
     cmd = fake_run.call_args[0][0]
@@ -50,7 +50,7 @@ def test_install_windows_translates_weekly_cron(tmp_path: Path, monkeypatch):
         s.install_task(
             name="weekly-x-compile",
             cron="0 17 * * 5",  # Friday 17:00
-            command="wreport compile x",
+            argv=["wreport", "compile", "x"],
             working_dir="/x",
         )
     cmd = fake_run.call_args[0][0]
@@ -81,7 +81,7 @@ def test_install_unix_writes_crontab(tmp_path: Path, monkeypatch):
         s.install_task(
             name="weekly-기획팀-assign",
             cron="0 * * * *",
-            command="/home/u/weekly/기획팀/venv/bin/wreport assign 기획팀",
+            argv=["/home/u/weekly/기획팀/venv/bin/wreport", "assign", "기획팀"],
             working_dir="/home/u/weekly/기획팀",
         )
     written = inputs_captured[0]
@@ -141,7 +141,7 @@ def test_install_rejects_dangerous_cron(tmp_path: Path, monkeypatch, bad_cron):
         with pytest.raises(ValueError):
             s.install_task(
                 name="weekly-x-assign", cron=bad_cron,
-                command="wreport assign x", working_dir="/x",
+                argv=["wreport", "assign", "x"], working_dir="/x",
             )
 
 
@@ -160,16 +160,20 @@ def test_install_rejects_dangerous_working_dir(tmp_path: Path, monkeypatch, bad_
         with pytest.raises(ValueError):
             s.install_task(
                 name="weekly-x-assign", cron="0 * * * *",
-                command="wreport assign x", working_dir=bad_dir,
+                argv=["wreport", "assign", "x"], working_dir=bad_dir,
             )
 
 
-@pytest.mark.parametrize("bad_command", [
-    "wreport assign x\nrm -rf /",       # newline inside command
-    "wreport \" assign \" x",           # injected quotes
-    "wreport assign x\x00",             # NUL
+@pytest.mark.parametrize("bad_argv_element", [
+    "assign\nrm -rf /",   # newline inside an arg → smuggle new crontab line
+    "assign\x00inject",   # NUL byte
+    "x\rcr",              # carriage return
+    "use%special",        # `%` is special in crontab — splits cmd from stdin
 ])
-def test_install_rejects_dangerous_command(tmp_path: Path, monkeypatch, bad_command):
+def test_install_rejects_dangerous_argv_element(tmp_path: Path, monkeypatch, bad_argv_element):
+    """The argv API still validates each element so platform-shell-bearing
+    chars (CR/LF/NUL/%) cannot smuggle through. Note: `\"` is now permitted
+    in argv elements because we quote each one internally."""
     monkeypatch.setattr(sys, "platform", "linux")
     s = _load_sched(tmp_path)
     with patch.object(s, "subprocess") as fake_subproc:
@@ -177,7 +181,19 @@ def test_install_rejects_dangerous_command(tmp_path: Path, monkeypatch, bad_comm
         with pytest.raises(ValueError):
             s.install_task(
                 name="weekly-x-assign", cron="0 * * * *",
-                command=bad_command, working_dir="/x",
+                argv=["wreport", bad_argv_element, "x"], working_dir="/x",
+            )
+
+
+def test_install_rejects_empty_argv(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(sys, "platform", "linux")
+    s = _load_sched(tmp_path)
+    with patch.object(s, "subprocess") as fake_subproc:
+        fake_subproc.run = MagicMock()
+        with pytest.raises(ValueError):
+            s.install_task(
+                name="weekly-x-assign", cron="0 * * * *",
+                argv=[], working_dir="/x",
             )
 
 
@@ -196,7 +212,7 @@ def test_install_rejects_dangerous_task_name(tmp_path: Path, monkeypatch, bad_na
         with pytest.raises(ValueError):
             s.install_task(
                 name=bad_name, cron="0 * * * *",
-                command="wreport assign x", working_dir="/x",
+                argv=["wreport", "assign", "x"], working_dir="/x",
             )
 
 
@@ -217,7 +233,7 @@ def test_install_unix_quotes_working_dir(tmp_path: Path, monkeypatch):
         fake_subproc.run = MagicMock(side_effect=run_side_effect)
         s.install_task(
             name="weekly-x-assign", cron="0 * * * *",
-            command="wreport assign x",
+            argv=["wreport", "assign", "x"],
             working_dir="/home/u/weekly project/팀",   # legitimate space
         )
     written = inputs_captured[0]
@@ -244,7 +260,7 @@ def test_unix_write_crontab_failure_raises(tmp_path: Path, monkeypatch):
         with pytest.raises(RuntimeError, match="crontab.*failed|invalid"):
             s.install_task(
                 name="weekly-x-assign", cron="0 * * * *",
-                command="wreport assign x", working_dir="/x",
+                argv=["wreport", "assign", "x"], working_dir="/x",
             )
 
 
@@ -260,6 +276,135 @@ def test_install_korean_name_still_works(tmp_path: Path, monkeypatch):
         fake_subproc.run = MagicMock(side_effect=run_side_effect)
         s.install_task(
             name="weekly-기획팀-assign", cron="0 * * * *",
-            command="/x/venv/bin/wreport assign 기획팀",
+            argv=["/x/venv/bin/wreport", "assign", "기획팀"],
             working_dir="/x",
         )
+
+
+# --- argv API regression (Review fix: schedule install quote conflict) ---
+
+
+def _capture_unix_run(state):
+    """Helper: side_effect that records crontab-write input as state['written']."""
+    def side_effect(*args, **kwargs):
+        state["n"] = state.get("n", 0) + 1
+        if state["n"] == 1:
+            return MagicMock(returncode=0, stdout="", stderr="")
+        state["written"] = kwargs.get("input")
+        return MagicMock(returncode=0, stdout="", stderr="")
+    return side_effect
+
+
+def test_install_task_accepts_argv_list_unix(tmp_path: Path, monkeypatch):
+    """install_task must accept argv: List[str] so callers don't have to
+    embed quotes themselves. Regression for the bug where schedule_install
+    passed `f'\"{wreport}\" prepare {team}'` only to be rejected by the
+    forbidden-quote validator."""
+    monkeypatch.setattr(sys, "platform", "linux")
+    s = _load_sched(tmp_path)
+    state = {}
+    with patch.object(s, "subprocess") as fake_subproc:
+        fake_subproc.run = MagicMock(side_effect=_capture_unix_run(state))
+        s.install_task(
+            name="weekly-기획팀-prepare",
+            cron="0 6 * * 1",
+            argv=["/home/u/weekly/기획팀/venv/bin/wreport", "prepare", "기획팀"],
+            working_dir="/home/u/weekly/기획팀",
+        )
+    written = state["written"]
+    # All three argv tokens land in the cron line
+    assert "/home/u/weekly/기획팀/venv/bin/wreport" in written
+    assert "prepare" in written
+    assert "기획팀" in written
+    # working_dir still gets shlex-quoted
+    assert "'/home/u/weekly/기획팀'" in written or "/home/u/weekly/기획팀" in written
+
+
+def test_install_task_quotes_argv_with_spaces_unix(tmp_path: Path, monkeypatch):
+    """argv elements containing spaces must be shlex-quoted in the cron
+    line so cron's shell sees them as a single argument."""
+    monkeypatch.setattr(sys, "platform", "linux")
+    s = _load_sched(tmp_path)
+    state = {}
+    with patch.object(s, "subprocess") as fake_subproc:
+        fake_subproc.run = MagicMock(side_effect=_capture_unix_run(state))
+        s.install_task(
+            name="weekly-x-prepare",
+            cron="0 6 * * 1",
+            argv=["/path with spaces/wreport", "prepare", "팀 이름"],
+            working_dir="/x",
+        )
+    written = state["written"]
+    assert "'/path with spaces/wreport'" in written
+    assert "'팀 이름'" in written
+
+
+def test_install_task_argv_supports_paths_with_double_quote_unsafe_chars(tmp_path: Path, monkeypatch):
+    """Even if a path contains characters the OLD command-string API rejected
+    (e.g. spaces), argv API succeeds because each element is quoted internally."""
+    monkeypatch.setattr(sys, "platform", "linux")
+    s = _load_sched(tmp_path)
+    state = {}
+    with patch.object(s, "subprocess") as fake_subproc:
+        fake_subproc.run = MagicMock(side_effect=_capture_unix_run(state))
+        # No exception — old API would have raised here
+        s.install_task(
+            name="weekly-x-assign",
+            cron="0 * * * *",
+            argv=["/usr/local/wreport with spaces", "assign", "x"],
+            working_dir="/x",
+        )
+
+
+def test_install_task_argv_rejects_newline_in_element(tmp_path: Path, monkeypatch):
+    """Validation still applies — newlines inside an argv element would
+    smuggle a new crontab line."""
+    monkeypatch.setattr(sys, "platform", "linux")
+    s = _load_sched(tmp_path)
+    import pytest
+    with patch.object(s, "subprocess") as fake_subproc:
+        fake_subproc.run = MagicMock()
+        with pytest.raises(ValueError):
+            s.install_task(
+                name="weekly-x-assign", cron="0 * * * *",
+                argv=["wreport", "assign\nrm -rf /", "x"],
+                working_dir="/x",
+            )
+
+
+def test_install_task_argv_rejects_nul_in_element(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(sys, "platform", "linux")
+    s = _load_sched(tmp_path)
+    import pytest
+    with patch.object(s, "subprocess") as fake_subproc:
+        fake_subproc.run = MagicMock()
+        with pytest.raises(ValueError):
+            s.install_task(
+                name="weekly-x-assign", cron="0 * * * *",
+                argv=["wreport", "assign\x00inject", "x"],
+                working_dir="/x",
+            )
+
+
+def test_install_task_argv_windows_quotes_path_with_spaces(tmp_path: Path, monkeypatch):
+    """Windows /TR string must wrap path-with-spaces in double quotes so
+    cmd.exe parses it as a single argument at trigger time."""
+    monkeypatch.setattr(sys, "platform", "win32")
+    s = _load_sched(tmp_path)
+    fake_run = MagicMock(return_value=MagicMock(returncode=0, stdout="", stderr=""))
+    with patch.object(s, "subprocess") as fake_subproc:
+        fake_subproc.run = fake_run
+        s.install_task(
+            name="weekly-기획팀-prepare",
+            cron="0 6 * * 1",
+            argv=[r"C:\Users\u\.venv\Scripts\wreport.exe", "prepare", "기획팀"],
+            working_dir=r"C:\Users\u\weekly\기획팀",
+        )
+    cmd = fake_run.call_args[0][0]
+    tr_idx = cmd.index("/TR") + 1
+    tr_value = cmd[tr_idx]
+    # Path is wrapped in double quotes (Windows convention)
+    assert r'"C:\Users\u\.venv\Scripts\wreport.exe"' in tr_value
+    assert r'"C:\Users\u\weekly\기획팀"' in tr_value
+    assert "prepare" in tr_value
+    assert "기획팀" in tr_value

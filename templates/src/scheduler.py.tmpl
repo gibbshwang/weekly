@@ -32,11 +32,17 @@ _CRON_FIELD_RE = re.compile(r"^[\d*/,\-]+$")
 # Restrict to the same slug shape used elsewhere in the project.
 _TASK_NAME_RE = re.compile(r"^[가-힣A-Za-z0-9_-]{1,80}$")
 
-# Characters forbidden inside working_dir / command. Newlines could synthesize
-# a new crontab line; NUL/CR truncate the line at the wrong point; quote
-# escapes the schtasks /TR string; `%` is special in crontab (it splits the
-# command from stdin) so it would re-interpret the rest of the command.
-_FORBIDDEN_CHARS = set("\"\r\n\x00%")
+# Characters forbidden inside working_dir. Newlines could synthesize a new
+# crontab line; NUL/CR truncate the line at the wrong point; `%` is special
+# in crontab (it splits the command from stdin); `"` would conflict with
+# the Windows /TR string quoting we add ourselves.
+_FORBIDDEN_DIR_CHARS = set("\"\r\n\x00%")
+
+# Characters forbidden inside argv elements. We quote each element ourselves
+# at build time (shlex on Unix, double-quote on Windows), so spaces and
+# even quotes in *path* elements would be allowed in principle — but newlines
+# / NUL / CR / `%` would still smuggle past the per-platform shell parsers.
+_FORBIDDEN_ARGV_CHARS = set("\r\n\x00%")
 
 
 def _validate_cron(cron: str) -> str:
@@ -68,10 +74,10 @@ def _validate_task_name(name: str) -> str:
     return name
 
 
-def _validate_no_forbidden(value: str, label: str) -> str:
+def _validate_against(value: str, label: str, forbidden: set) -> str:
     if not isinstance(value, str):
         raise ValueError(f"{label} must be a string, got {type(value).__name__}")
-    bad = sorted({c for c in value if c in _FORBIDDEN_CHARS})
+    bad = sorted({c for c in value if c in forbidden})
     if bad:
         raise ValueError(
             f"{label} contains forbidden characters {bad!r}: {value!r}"
@@ -79,16 +85,50 @@ def _validate_no_forbidden(value: str, label: str) -> str:
     return value
 
 
-def install_task(name: str, cron: str, command: str, working_dir: str) -> None:
-    """Register a scheduled task. Idempotent (uninstall then install)."""
+def _validate_argv(argv) -> List[str]:
+    if not isinstance(argv, (list, tuple)) or not argv:
+        raise ValueError(f"argv must be a non-empty list/tuple, got {argv!r}")
+    out: List[str] = []
+    for i, a in enumerate(argv):
+        out.append(_validate_against(a, f"argv[{i}]", _FORBIDDEN_ARGV_CHARS))
+    return out
+
+
+def _win_quote_path(s: str) -> str:
+    """Always wrap a path-like value in double quotes for the schtasks /TR
+    string. Embedded quotes are doubled per CommandLineToArgvW. We use this
+    unconditionally for argv[0] and working_dir since they're paths the
+    operator expects to round-trip exactly."""
+    return '"' + s.replace('"', '""') + '"'
+
+
+def _win_quote_arg(s: str) -> str:
+    """Quote a non-path argv element only if it contains whitespace or a
+    quote — keeps simple tokens (e.g. `prepare`, `기획팀`) readable in the
+    schtasks GUI."""
+    if not s:
+        return '""'
+    if any(c in s for c in ' \t"'):
+        return '"' + s.replace('"', '""') + '"'
+    return s
+
+
+def install_task(name: str, cron: str, argv, working_dir: str) -> None:
+    """Register a scheduled task. Idempotent (uninstall then install).
+
+    `argv` is a non-empty list of strings: argv[0] is the program path,
+    the rest are arguments. Each element is validated for newline/NUL/CR/%
+    and quoted internally per-platform — callers must NOT add their own
+    quotes (that was the legacy bug).
+    """
     name = _validate_task_name(name)
     cron = _validate_cron(cron)
-    command = _validate_no_forbidden(command, "command")
-    working_dir = _validate_no_forbidden(working_dir, "working_dir")
+    argv = _validate_argv(argv)
+    working_dir = _validate_against(working_dir, "working_dir", _FORBIDDEN_DIR_CHARS)
     if sys.platform == "win32":
-        _install_windows(name, cron, command, working_dir)
+        _install_windows(name, cron, argv, working_dir)
     else:
-        _install_unix(name, cron, command, working_dir)
+        _install_unix(name, cron, argv, working_dir)
 
 
 def uninstall_task(name: str) -> None:
@@ -120,10 +160,16 @@ def _windows_schedule_flags(cron: str) -> List[str]:
     return ["/SC", "HOURLY"]
 
 
-def _install_windows(name: str, cron: str, command: str, working_dir: str) -> None:
+def _install_windows(name: str, cron: str, argv: List[str], working_dir: str) -> None:
+    # argv[0] is the executable path → always quote (round-trips exactly).
+    # Subsequent args use smart quoting (only quote if needed).
+    quoted_command = " ".join(
+        [_win_quote_path(argv[0])] + [_win_quote_arg(a) for a in argv[1:]]
+    )
+    quoted_dir = _win_quote_path(working_dir)
     cmd = [
         "schtasks", "/Create", "/TN", name, "/F",
-        "/TR", f'cmd /c cd /d "{working_dir}" && {command}',
+        "/TR", f'cmd /c cd /d {quoted_dir} && {quoted_command}',
     ]
     cmd += _windows_schedule_flags(cron)
     res = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8")
@@ -189,15 +235,14 @@ def _write_crontab(content: str) -> None:
         )
 
 
-def _install_unix(name: str, cron: str, command: str, working_dir: str) -> None:
+def _install_unix(name: str, cron: str, argv: List[str], working_dir: str) -> None:
     existing = _read_crontab()
     cleaned = _strip_managed_entry(existing, name)
     cleaned.append(f"{_MARKER_PREFIX} {name}")
-    # shlex.quote() wraps working_dir so cron's shell sees it as a single
-    # argument even if it contains spaces. command is left unquoted because
-    # it is intentionally a shell command (caller may chain with &&); the
-    # forbidden-char validator above already rejected the dangerous shapes.
-    cleaned.append(f"{cron} cd {shlex.quote(working_dir)} && {command}")
+    # shlex.quote each argv element and the working_dir so cron's shell
+    # sees them as single arguments even with spaces or special chars.
+    quoted_command = " ".join(shlex.quote(a) for a in argv)
+    cleaned.append(f"{cron} cd {shlex.quote(working_dir)} && {quoted_command}")
     _write_crontab("\n".join(cleaned) + "\n")
 
 

@@ -64,18 +64,18 @@ def register_cron_tasks(project_root: Path,
     install_task(
         name=f"weekly-{team_name}-prepare",
         cron=prepare_cron,
-        command=f'"{wreport}" prepare {team_name}',
+        argv=[str(wreport), "prepare", team_name],
         working_dir=str(project_root),
     )
     install_task(
         name=f"weekly-{team_name}-assign",
         cron=assign_cron,
-        command=f'"{wreport}" assign {team_name}',
+        argv=[str(wreport), "assign", team_name],
         working_dir=str(project_root),
     )
     install_task(
         name=f"weekly-{team_name}-compile",
         cron=compile_cron,
-        command=f'"{wreport}" compile {team_name}',
+        argv=[str(wreport), "compile", team_name],
         working_dir=str(project_root),
     )
