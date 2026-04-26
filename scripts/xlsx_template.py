@@ -18,13 +18,20 @@ def generate_xlsx(out_path: Path, dept_name: str, parts: List[str]) -> None:
     ws.title = f"{dept_name} 지시사항"
     ws.append(HEADERS)
 
-    # 담당파트 dropdown (column C, rows 2-1000)
-    parts_formula = '"' + ",".join(parts) + '"'
-    dv_part = DataValidation(type="list", formula1=parts_formula, allow_blank=True)
+    # 담당파트 dropdown — sourced from a hidden `_refs` sheet rather than an
+    # inline `"a,b,c"` literal. The literal form breaks on commas/quotes in
+    # part names and could be parsed by Excel as a formula if a part starts
+    # with `=+@-`. Real cell sources are unambiguous and immune to both.
+    refs = wb.create_sheet("_refs")
+    refs.sheet_state = "hidden"
+    for i, part in enumerate(parts, start=1):
+        refs.cell(row=i, column=1, value=part)
+    parts_range = f"_refs!$A$1:$A${max(len(parts), 1)}"
+    dv_part = DataValidation(type="list", formula1=parts_range, allow_blank=True)
     dv_part.add("C2:C1000")
     ws.add_data_validation(dv_part)
 
-    # 우선순위 dropdown (column D)
+    # 우선순위 dropdown (column D) — fixed, controlled set; inline literal is fine
     pri_formula = '"' + ",".join(PRIORITIES) + '"'
     dv_pri = DataValidation(type="list", formula1=pri_formula, allow_blank=True)
     dv_pri.add("D2:D1000")
