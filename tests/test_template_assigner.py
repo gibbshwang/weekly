@@ -381,6 +381,38 @@ def test_resolve_target_part_handles_parts_without_role(tmp_path: Path):
 # --- append_to_part_xlsx ---
 
 
+def test_append_to_part_xlsx_neutralizes_formula_in_free_text(tmp_path: Path):
+    """Regression: assigner copies free-text fields (지시내용, 비고) from
+    _지시사항.xlsx straight into the part workbook. Formula-leading values
+    like `=HYPERLINK(..)` would auto-evaluate when the part lead opens
+    their xlsx. safe_excel_text must prefix `'` to neutralize."""
+    a = _load_assigner(tmp_path)
+    team = _team()
+    week_dir = tmp_path / "2026-W18"
+    _create_week_workbooks(week_dir, team)
+    a.append_to_part_xlsx(
+        part_xlsx_path=week_dir / "전략기획.xlsx",
+        task_id="W18-001",
+        row={
+            "일자": "2026-04-27",
+            "지시내용": "=HYPERLINK(\"https://evil/\",\"클릭\")",
+            "우선순위": "높음",
+            "마감": "2026-04-30",
+            "비고": "+cmd|' /C calc'!A0",
+        },
+        source="지시사항",
+    )
+    wb = load_workbook(week_dir / "전략기획.xlsx")
+    rows = list(wb["이번주"].iter_rows(min_row=2, values_only=True))
+    by_header = dict(zip(PART_SHEET_HEADERS, rows[0]))
+    # Both free-text cells start with `'` (Excel renders as plain text)
+    assert by_header["업무_지시내용"].startswith("'=HYPERLINK"), by_header["업무_지시내용"]
+    assert by_header["비고"].startswith("'+cmd|"), by_header["비고"]
+    # System-generated cols (업무ID, 출처) untouched
+    assert by_header["업무ID"] == "W18-001"
+    assert by_header["출처"] == "지시사항"
+
+
 def test_append_to_part_xlsx_writes_to_이번주_with_source_지시사항(tmp_path: Path):
     a = _load_assigner(tmp_path)
     team = _team()
