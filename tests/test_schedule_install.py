@@ -36,9 +36,9 @@ def _setup_fake_runtime(project_root: Path):
         f"import json\n"
         f"from pathlib import Path\n"
         f"_calls_file = Path(r'{calls_log}')\n"
-        f"def install_task(name, cron, command, working_dir):\n"
+        f"def install_task(name, cron, argv, working_dir):\n"
         f"    calls = json.loads(_calls_file.read_text(encoding='utf-8')) if _calls_file.exists() else []\n"
-        f"    calls.append({{'name': name, 'cron': cron, 'command': command, 'working_dir': working_dir}})\n"
+        f"    calls.append({{'name': name, 'cron': cron, 'argv': list(argv), 'working_dir': working_dir}})\n"
         f"    _calls_file.write_text(json.dumps(calls, indent=2), encoding='utf-8')\n",
         encoding="utf-8",
     )
@@ -81,9 +81,12 @@ def test_register_cron_tasks_uses_platform_appropriate_wreport(tmp_path, monkeyp
 
     calls = json.loads((project_root / "scheduler_calls.json").read_text(encoding="utf-8"))
     for c in calls:
-        assert "venv" in c["command"]
-        assert "wreport" in c["command"]
-        assert ".exe" in c["command"]
+        # argv[0] is the wreport executable path
+        assert "venv" in c["argv"][0]
+        assert "wreport" in c["argv"][0]
+        assert ".exe" in c["argv"][0]
+        # No legacy embedded quotes — caller must NOT pre-quote anymore
+        assert '"' not in c["argv"][0]
 
 
 @pytest.mark.parametrize("bad_team", [

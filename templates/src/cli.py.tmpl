@@ -292,19 +292,19 @@ def schedule_install_cmd(team, config_path) -> None:
     install_task(
         name=f"weekly-{name}-prepare",
         cron=cfg.schedule.prepare_cron,
-        command=f'"{wreport}" prepare {name}',
+        argv=[str(wreport), "prepare", name],
         working_dir=str(project_root),
     )
     install_task(
         name=f"weekly-{name}-assign",
         cron=cfg.schedule.assign_cron,
-        command=f'"{wreport}" assign {name}',
+        argv=[str(wreport), "assign", name],
         working_dir=str(project_root),
     )
     install_task(
         name=f"weekly-{name}-compile",
         cron=cfg.schedule.compile_cron,
-        command=f'"{wreport}" compile {name}',
+        argv=[str(wreport), "compile", name],
         working_dir=str(project_root),
     )
     click.echo(f"Installed weekly-{name}-prepare, -assign, and -compile.")
