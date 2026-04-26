@@ -200,6 +200,8 @@ def test_compile_system_template_renders():
             {"name": "운영그룹", "parts": ["운영관리"]},
         ],
         week="2026-W18",
+        this_week_start="2026-04-27", this_week_end="2026-05-03",
+        next_week_start="2026-05-04", next_week_end="2026-05-10",
     )
     assert "기획팀" in out
     assert "사업그룹" in out
@@ -207,3 +209,58 @@ def test_compile_system_template_renders():
     assert "2026-W18" in out
     for key in ("팀_종합_요약", "지난주", "이번주", "그룹별_요약", "그룹장_확인필요"):
         assert key in out
+
+
+# --- week date range injection (Todo 3: deterministic 그룹장_확인필요 dates) ---
+
+
+def test_week_date_ranges_helper_normal_week(tmp_path: Path):
+    """`_week_date_ranges('2026-W18')` must yield the Mon–Sun range for the
+    given ISO week and the following week. Hand-checked with isocalendar:
+    W18 of 2026 = 2026-04-27 (Mon) … 2026-05-03 (Sun)."""
+    compiler = _load_compiler(tmp_path)
+    ranges = compiler._week_date_ranges("2026-W18")
+    assert ranges["this_week_start"] == "2026-04-27"
+    assert ranges["this_week_end"] == "2026-05-03"
+    assert ranges["next_week_start"] == "2026-05-04"
+    assert ranges["next_week_end"] == "2026-05-10"
+
+
+def test_week_date_ranges_handles_year_boundary(tmp_path: Path):
+    """Last ISO week of a year — next week falls into the new ISO year.
+    2026-W53 spans 2026-12-28 … 2027-01-03, then W01 of 2027 follows."""
+    compiler = _load_compiler(tmp_path)
+    ranges = compiler._week_date_ranges("2026-W53")
+    assert ranges["this_week_start"] == "2026-12-28"
+    assert ranges["this_week_end"] == "2027-01-03"
+    assert ranges["next_week_start"] == "2027-01-04"
+    assert ranges["next_week_end"] == "2027-01-10"
+
+
+def test_week_date_ranges_rejects_malformed_input(tmp_path: Path):
+    compiler = _load_compiler(tmp_path)
+    import pytest
+    with pytest.raises(ValueError):
+        compiler._week_date_ranges("nonsense")
+
+
+def test_run_compile_injects_date_ranges_into_prompt(tmp_path: Path):
+    """Compile must compute this/next week date ranges in Python and pass
+    them to the prompt template so the LLM stops guessing the calendar.
+    Required for Todo 3: 그룹장_확인필요 deterministic 마감일 비교."""
+    compiler = _load_compiler(tmp_path)
+    fake_llm = MagicMock()
+    fake_llm.call.return_value = json.dumps({
+        "팀_종합_요약": "x", "지난주": {"요약": "", "항목": []},
+        "이번주": {"요약": "", "항목": []}, "그룹별_요약": {},
+        "그룹장_확인필요": [], "미작성_파트": [], "주의사항": [],
+    }, ensure_ascii=False)
+    compiler.run_compile(
+        llm=fake_llm, team=_team(), week="2026-W18",
+        parts_data={}, prompt_template_path=PROMPT_PATH,
+    )
+    sys_prompt = fake_llm.call.call_args[0][0]
+    assert "2026-04-27" in sys_prompt
+    assert "2026-05-03" in sys_prompt
+    assert "2026-05-04" in sys_prompt
+    assert "2026-05-10" in sys_prompt
