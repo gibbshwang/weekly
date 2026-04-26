@@ -2,15 +2,49 @@
 
 Loaded from `config.yaml` at the project root (the directory `wreport` is invoked from).
 """
+import re
 from pathlib import Path
 from typing import List, Literal, Optional
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+
+# Department / part names land in three sensitive places:
+#   1. filesystem path joins (storage root, .md filenames, dashboard output)
+#   2. cron command interpolation (wreport assign <name>)
+#   3. Excel DataValidation list source
+# Restrict to a slug-friendly charset that's safe for all three. Korean,
+# alphanumeric, underscore, hyphen — nothing that needs shell, path, or
+# spreadsheet escaping. The first character must NOT be `-` (Excel reads any
+# cell starting with `=+@-` as a formula).
+_SAFE_NAME_RE = re.compile(r"^[가-힣A-Za-z0-9_][가-힣A-Za-z0-9_-]{0,39}$")
+
+
+def _validate_safe_name(value: str, label: str) -> str:
+    if not isinstance(value, str) or not _SAFE_NAME_RE.fullmatch(value):
+        raise ValueError(
+            f"{label!r} must be 1-40 chars of Korean / A-Z / 0-9 / _ / - "
+            f"(no spaces, no path separators, no Excel formula chars). "
+            f"Got: {value!r}"
+        )
+    return value
 
 
 class Department(BaseModel):
     name: str
     parts: List[str]
+
+    @field_validator("name")
+    @classmethod
+    def _check_name(cls, v: str) -> str:
+        return _validate_safe_name(v, "department.name")
+
+    @field_validator("parts")
+    @classmethod
+    def _check_parts(cls, v: List[str]) -> List[str]:
+        if not v:
+            raise ValueError("department.parts must not be empty")
+        return [_validate_safe_name(p, "department.parts[]") for p in v]
 
 
 class Person(BaseModel):
@@ -22,6 +56,11 @@ class PartLead(BaseModel):
     part: str
     name: str
     email: str
+
+    @field_validator("part")
+    @classmethod
+    def _check_part(cls, v: str) -> str:
+        return _validate_safe_name(v, "part_leads[].part")
 
 
 class StorageConfig(BaseModel):

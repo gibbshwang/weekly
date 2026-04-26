@@ -70,3 +70,75 @@ def test_load_config_rejects_invalid_provider(tmp_path: Path):
     import pytest
     with pytest.raises(Exception):  # pydantic ValidationError
         mod.load_config(yaml_path)
+
+
+# --- Department / part name validators (FIX-07) ---
+
+import pytest
+
+
+def _build_minimal_yaml(tmp_path: Path, dept_name: str, parts: list[str]) -> Path:
+    yaml_path = tmp_path / "config.yaml"
+    yaml_path.write_text(yaml.safe_dump({
+        "department": {"name": dept_name, "parts": parts},
+        "group_lead": {"name": "x", "email": "x@x.com"},
+        "part_leads": [{"part": parts[0], "name": "x", "email": "x@x.com"}],
+        "storage": {"type": "local", "root": str(tmp_path / "store")},
+        "schedule": {"assign_cron": "0 * * * *", "compile_cron": "0 17 * * 5"},
+        "smtp": {"host": "x", "port": 587, "user": "x@x.com"},
+        "ai": {"provider": "codex"},
+        "prompts": {"override_dir": None},
+    }, allow_unicode=True), encoding="utf-8")
+    return yaml_path
+
+
+@pytest.mark.parametrize("bad_name", [
+    "../etc",
+    "..\\windows",
+    "foo/bar",
+    "foo\\bar",
+    "foo\x00null",
+    "foo\nbar",
+    "",                  # empty
+    "a" * 41,            # too long
+    "foo bar",           # space — could break path/cron interpolation
+])
+def test_dept_name_rejects_dangerous_input(tmp_path: Path, bad_name: str):
+    """dept_name flows into filesystem paths and cron commands; restrict charset."""
+    mod = _load_config_module(tmp_path)
+    yaml_path = _build_minimal_yaml(tmp_path, dept_name=bad_name, parts=["전략기획"])
+    with pytest.raises(Exception):
+        mod.load_config(yaml_path)
+
+
+@pytest.mark.parametrize("bad_part", [
+    "../escape",
+    "foo/bar",
+    "=HYPERLINK(\"http://evil\",\"click\")",   # Excel formula injection
+    "+SUM(1+1)",                                # Excel injection prefix
+    "@cmd",                                     # Excel injection prefix
+    "-sum",                                     # Excel injection prefix
+    "foo,bar",                                  # breaks DataValidation list literal
+    "foo\"bar",                                 # breaks DataValidation list literal
+    "foo\nbar",                                 # control char
+    "",                                         # empty
+])
+def test_part_name_rejects_dangerous_input(tmp_path: Path, bad_part: str):
+    """part names flow into filesystem paths AND Excel DataValidation; restrict charset."""
+    mod = _load_config_module(tmp_path)
+    yaml_path = _build_minimal_yaml(tmp_path, dept_name="기획팀", parts=[bad_part])
+    with pytest.raises(Exception):
+        mod.load_config(yaml_path)
+
+
+def test_validators_accept_korean_and_safe_chars(tmp_path: Path):
+    """Sanity check: real-world Korean dept/part names still validate."""
+    mod = _load_config_module(tmp_path)
+    yaml_path = _build_minimal_yaml(
+        tmp_path,
+        dept_name="전략기획팀_2026",
+        parts=["전략기획", "사업개발", "neo-team", "Quant_Research"],
+    )
+    cfg = mod.load_config(yaml_path)
+    assert cfg.department.name == "전략기획팀_2026"
+    assert "neo-team" in cfg.department.parts
