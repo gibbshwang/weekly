@@ -62,28 +62,46 @@ except ImportError:  # pragma: no cover — exercised by harness tests
 
 _TASK_ID_RE = re.compile(r"^W(\d{1,2})-(\d{3})$")
 
-# Fields that participate in the instruction's *identity*. 비고 is intentionally
-# excluded — the operator may annotate a row freely after assignment without
-# triggering a new task ID. Hard cutover from the legacy row_index/row_hash
-# scheme: state files written by older versions will look like an empty state
-# (no `instructions` key) and every row will be re-processed once.
-_INSTRUCTION_KEY_FIELDS = ("일자", "지시내용", "담당파트", "마감", "우선순위")
+# Identity-bearing fields. Editing one of these creates a *new* logical task
+# (the instruction has substantively changed). Editing the other content
+# fields below updates the existing task's mutable cells in place.
+# 비고 is excluded from BOTH so operator commentary doesn't flip anything.
+_INSTRUCTION_KEY_FIELDS = ("일자", "지시내용", "담당파트")
+# Mutable fields — their values flow through to the part xlsx and are updated
+# on edit, but they don't change the instruction's identity.
+_CONTENT_FIELDS = _INSTRUCTION_KEY_FIELDS + ("마감", "우선순위", "비고")
+
+
+def _normalized_field(value) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value.strip()
+    return str(value)
 
 
 def _instruction_key(row: Dict[str, Any]) -> str:
-    """Position-independent fingerprint of an instruction.
+    """Position-independent identity of an instruction (immutable fields only).
 
-    Hashes a normalized projection of the identity-bearing fields so:
-    - Reordering / inserting rows in the directives xlsx does not flip identity
-    - Editing 비고 (operator commentary) does not flip identity
-    - Editing 지시내용 etc. *does* flip identity (treated as a new instruction)
+    - Reordering / inserting rows in the directives xlsx does not flip identity.
+    - Editing 마감 / 우선순위 / 비고 does NOT flip identity (those are mutable).
+    - Editing 일자 / 지시내용 / 담당파트 *does* flip identity (treated as a
+      new instruction; old task remains in the part xlsx).
     """
     canonical = json.dumps(
-        {
-            field: (row.get(field) or "").strip() if isinstance(row.get(field), str)
-                   else (row.get(field) or "")
-            for field in _INSTRUCTION_KEY_FIELDS
-        },
+        {f: _normalized_field(row.get(f)) for f in _INSTRUCTION_KEY_FIELDS},
+        sort_keys=True,
+        ensure_ascii=False,
+    )
+    return "sha256:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _content_hash(row: Dict[str, Any]) -> str:
+    """Snapshot of all content-bearing fields (identity + mutable). When this
+    changes for a known instruction_key, the part xlsx row needs an in-place
+    update for the changed mutable cells (마감 / 우선순위 / 비고)."""
+    canonical = json.dumps(
+        {f: _normalized_field(row.get(f)) for f in _CONTENT_FIELDS},
         sort_keys=True,
         ensure_ascii=False,
     )
@@ -100,27 +118,58 @@ def _strip_code_fence(text: str) -> str:
     return text.strip()
 
 
-def diff_rows(rows: List[Dict[str, Any]], state_path: Path) -> List[int]:
-    """Return indices of rows whose instruction_key has not been processed yet.
+def diff_rows(rows: List[Dict[str, Any]], state_path: Path) -> Tuple[List[int], List[int]]:
+    """Classify each row against last-known state.
 
-    Order-independent — sorting / inserting rows in the directives xlsx will
-    not re-classify already-assigned content.
+    Returns (new_indices, updated_indices):
+      new_indices    — instruction_key never seen before (assign + append)
+      updated_indices — known instruction_key but content_hash changed
+                        (마감/우선순위/비고 edited; update part xlsx in place)
+
+    Order-independent. Identity-stable rows whose mutable fields didn't
+    change are excluded from both lists (no work needed).
     """
     state_path = Path(state_path)
     if not state_path.exists():
-        return list(range(len(rows)))
+        return list(range(len(rows))), []
     state = json.loads(state_path.read_text(encoding="utf-8"))
-    known = {entry["instruction_key"] for entry in state.get("instructions", [])}
-    return [i for i, row in enumerate(rows) if _instruction_key(row) not in known]
+    known: Dict[str, Dict[str, str]] = {
+        entry["instruction_key"]: entry
+        for entry in state.get("instructions", [])
+    }
+    new_idx, updated_idx = [], []
+    for i, row in enumerate(rows):
+        ikey = _instruction_key(row)
+        if ikey not in known:
+            new_idx.append(i)
+        elif known[ikey].get("content_hash") != _content_hash(row):
+            updated_idx.append(i)
+    return new_idx, updated_idx
+
+
+def _read_state(state_path: Path) -> List[Dict[str, str]]:
+    """Return the persisted instruction entries (or empty list if none yet)."""
+    state_path = Path(state_path)
+    if not state_path.exists():
+        return []
+    return json.loads(state_path.read_text(encoding="utf-8")).get("instructions", [])
+
+
+def _state_entry_for_key(state_path: Path, instruction_key: str) -> Optional[Dict[str, str]]:
+    for e in _read_state(state_path):
+        if e.get("instruction_key") == instruction_key:
+            return e
+    return None
 
 
 def update_state(state_path: Path, rows: List[Dict[str, Any]],
                  entries: List[Tuple[int, str, str]]) -> None:
-    """Persist processed-instruction state.
+    """Persist processed-instruction state with task_id + content_hash.
 
-    `entries` is List[(row_index, assigned_part, method)] — the row_index
-    is used only to look up the current row content for fingerprinting; it
-    is not stored in the state file (that's the whole point of Todo 2).
+    `entries` is List[(row_index, assigned_part, method)]. Pre-existing entries
+    in `entries` whose row index is None can be passed through with their
+    fields preserved (used by the in-place-update path which doesn't have a
+    row_index — it has the existing task_id from state).
     """
     state_path = Path(state_path)
     state_path.parent.mkdir(parents=True, exist_ok=True)
@@ -128,6 +177,10 @@ def update_state(state_path: Path, rows: List[Dict[str, Any]],
         "instructions": [
             {
                 "instruction_key": _instruction_key(rows[idx]),
+                "content_hash": _content_hash(rows[idx]),
+                # task_id is filled in by run_assign — bare update_state
+                # callers (legacy tests) don't have it; tolerate absence.
+                "task_id": "",
                 "assigned_to": part,
                 "method": method,
             }
@@ -140,18 +193,19 @@ def update_state(state_path: Path, rows: List[Dict[str, Any]],
 def _carry_forward_state(state_path: Path) -> List[Dict[str, str]]:
     """Return all existing state entries unchanged.
 
-    With the fingerprint scheme `diff_rows` already excludes any row whose
-    key is in state, so every existing entry is safe to preserve verbatim.
+    With the identity_key + content_hash scheme, diff_rows already classifies
+    every row as new / updated / unchanged and returns indices for the first
+    two. Existing state entries belong to "unchanged or updated" rows; updated
+    rows will be re-emitted with refreshed content_hash by run_assign, so
+    starting from the existing entries is the right baseline.
     """
-    state_path = Path(state_path)
-    if not state_path.exists():
-        return []
-    existing = json.loads(state_path.read_text(encoding="utf-8")).get("instructions", [])
     return [
         {"instruction_key": e["instruction_key"],
-         "assigned_to": e["assigned_to"],
-         "method": e["method"]}
-        for e in existing
+         "content_hash": e.get("content_hash", ""),
+         "task_id": e.get("task_id", ""),
+         "assigned_to": e.get("assigned_to", ""),
+         "method": e.get("method", "")}
+        for e in _read_state(state_path)
     ]
 
 
@@ -251,6 +305,33 @@ def resolve_target_part(row: Dict[str, Any], team, llm, prompt_template_path: Pa
     return g, p, "ai_inferred"
 
 
+_MUTABLE_PART_FIELDS = ("마감", "우선순위", "비고")
+
+
+def update_part_xlsx_row(part_xlsx_path: Path, task_id: str, row: Dict[str, Any]) -> bool:
+    """Update mutable cells (마감 / 우선순위 / 비고) on the existing row whose
+    업무ID matches `task_id`. Lead-input columns (상태 / 처리결과 / etc.) are
+    NOT touched — those belong to the part lead.
+
+    Returns True if a row was found and updated, False if no row matched
+    (caller may fall back to append). Searches 이번주 first, then 지난주.
+    """
+    part_xlsx_path = Path(part_xlsx_path)
+    wb = load_workbook(part_xlsx_path)
+    for sheet_name in ("이번주", "지난주"):
+        if sheet_name not in wb.sheetnames:
+            continue
+        ws = wb[sheet_name]
+        for r in ws.iter_rows(min_row=2):
+            if r and r[0].value == task_id:
+                for field in _MUTABLE_PART_FIELDS:
+                    col_idx = PART_SHEET_HEADERS.index(field)
+                    r[col_idx].value = safe_excel_text(row.get(field, ""))
+                wb.save(part_xlsx_path)
+                return True
+    return False
+
+
 def append_to_part_xlsx(
     part_xlsx_path: Path,
     task_id: str,
@@ -306,8 +387,8 @@ def run_assign(
     skipped). The cron stack runs prepare on Monday morning before assign,
     but a fresh setup or manual first-run can hit this case.
     """
-    new_idx = diff_rows(rows, state_path)
-    if not new_idx:
+    new_idx, updated_idx = diff_rows(rows, state_path)
+    if not new_idx and not updated_idx:
         return {}
 
     # Prepare prerequisite: every part needs its xlsx workbook to exist.
@@ -348,11 +429,14 @@ def run_assign(
 
         seq = next_seq_for_week(part_xlsx_dir, team, week)
         affected: Dict[str, List[str]] = {}
-        # All previously-processed instructions remain in state. diff_rows
-        # already excluded their keys from new_idx, so nothing is reprocessed.
+        # Carry the existing state forward; we'll mutate updated entries
+        # in place and append new entries below before rewriting state.
         carried = _carry_forward_state(state_path)
-        new_entries: List[Tuple[int, str, str]] = []
+        # Build a key→entry map so the update path can find + mutate the
+        # right state row by instruction_key.
+        carried_by_key = {e["instruction_key"]: e for e in carried}
 
+        # NEW rows: assign + append
         for idx in sorted(new_idx):
             row = rows[idx]
             group, part, method = resolve_target_part(
@@ -365,20 +449,57 @@ def run_assign(
                 task_id=task_id, row=row, source="지시사항",
             )
             affected.setdefault(part.name, []).append(task_id)
-            new_entries.append((idx, part.name, method))
+            entry = {
+                "instruction_key": _instruction_key(row),
+                "content_hash": _content_hash(row),
+                "task_id": task_id,
+                "assigned_to": part.name,
+                "method": method,
+            }
+            carried_by_key[entry["instruction_key"]] = entry
 
-        # Persist carried-forward + newly-assigned. We rebuild the state file in
-        # one shot — the new payload is the union of both.
-        payload = {
-            "instructions": [
-                *carried,
-                *[
-                    {"instruction_key": _instruction_key(rows[idx]),
-                     "assigned_to": part, "method": method}
-                    for idx, part, method in new_entries
-                ],
-            ]
-        }
+        # UPDATED rows: mutate the existing part xlsx row in place. Lead-input
+        # cells (상태 / 처리결과 / etc.) are preserved; only mutable cells
+        # (마감 / 우선순위 / 비고) are refreshed.
+        for idx in sorted(updated_idx):
+            row = rows[idx]
+            ikey = _instruction_key(row)
+            existing = carried_by_key.get(ikey)
+            if not existing or not existing.get("task_id"):
+                # State is missing task_id (legacy entry pre-PR#21 or hand-
+                # edited state). Treat as new to keep things working.
+                group, part, method = resolve_target_part(
+                    row, team=team, llm=llm, prompt_template_path=prompt_template_path,
+                )
+                task_id = generate_task_id(week, seq)
+                seq += 1
+                append_to_part_xlsx(
+                    part_xlsx_path=Path(part_xlsx_dir) / f"{part.name}.xlsx",
+                    task_id=task_id, row=row, source="지시사항",
+                )
+                affected.setdefault(part.name, []).append(task_id)
+                carried_by_key[ikey] = {
+                    "instruction_key": ikey,
+                    "content_hash": _content_hash(row),
+                    "task_id": task_id,
+                    "assigned_to": part.name,
+                    "method": method,
+                }
+                continue
+            task_id = existing["task_id"]
+            assigned_part_name = existing["assigned_to"]
+            updated = update_part_xlsx_row(
+                part_xlsx_path=Path(part_xlsx_dir) / f"{assigned_part_name}.xlsx",
+                task_id=task_id, row=row,
+            )
+            # Refresh content_hash regardless of whether the part xlsx had
+            # the row (e.g. it may have moved to next week's folder); the
+            # update either succeeded or was a no-op.
+            existing["content_hash"] = _content_hash(row)
+            if updated:
+                affected.setdefault(assigned_part_name, []).append(task_id)
+
+        payload = {"instructions": list(carried_by_key.values())}
         state_path.write_text(
             json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
         )
