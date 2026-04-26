@@ -369,6 +369,75 @@ def test_run_compile_normalizes_missing_keys(tmp_path: Path):
     assert result["주의사항"] == []
 
 
+def test_build_user_prompt_includes_rows_for_미작성_parts(tmp_path: Path):
+    """Regression: previously 미작성 parts emitted only "(미작성)" and skipped
+    their auto-assigned rows from the prompt — group lead saw no detail
+    about queued tasks for those parts. Now rows are included with a
+    distinct marker so the LLM puts them under 미응답_배정항목."""
+    compiler = _load_compiler(tmp_path)
+    parts_data = {
+        "전략기획": {
+            "group": "사업그룹", "미작성": True,
+            "이번주": [
+                {"업무ID": "W18-003", "출처": "지시사항",
+                 "업무_지시내용": "경쟁사 요금제 영향 분석",
+                 "상태": "", "마감": "2026-05-03", "우선순위": "높음"},
+            ],
+            "지난주": [],
+        },
+        "사업개발": {
+            "group": "사업그룹", "미작성": False,
+            "이번주": [
+                {"업무ID": "W18-004", "출처": "파트작성",
+                 "업무_지시내용": "고객 미팅", "상태": "진행중",
+                 "마감": "2026-04-30", "우선순위": "보통"},
+            ],
+            "지난주": [],
+        },
+    }
+    prompt = compiler._build_user_prompt("기획팀", "2026-W18", parts_data)
+    # Marker present so LLM can route 전략기획 row to 미응답_배정항목
+    assert "(미작성" in prompt
+    # The 전략기획 task is now visible in the prompt (was hidden before)
+    assert "W18-003" in prompt
+    assert "경쟁사 요금제 영향 분석" in prompt
+
+
+def test_run_compile_normalizes_unanswered_assigned_section(tmp_path: Path):
+    """Regression: 미응답_배정항목 (LLM output for queued-but-untouched
+    tasks of 미작성 parts) goes through the same normalization as other
+    schema sections."""
+    compiler = _load_compiler(tmp_path)
+    fake_llm = MagicMock()
+    fake_llm.call.return_value = json.dumps({
+        "팀_종합_요약": "ok",
+        "지난주": {"요약": "", "항목": []},
+        "이번주": {"요약": "", "항목": []},
+        "그룹별_요약": {},
+        "그룹장_확인필요": [],
+        "미작성_파트": ["전략기획"],
+        "미응답_배정항목": [
+            {"그룹": "사업그룹", "파트": "전략기획", "업무ID": "W18-003",
+             "업무": "경쟁사 분석", "마감": "2026-05-03", "우선순위": "높음"},
+            "not-a-dict",   # malformed — must coerce
+        ],
+        "주의사항": [],
+    }, ensure_ascii=False)
+    result = compiler.run_compile(
+        llm=fake_llm, team=_team(), week="2026-W18",
+        parts_data={}, prompt_template_path=PROMPT_PATH,
+    )
+    items = result["미응답_배정항목"]
+    assert len(items) == 2
+    assert items[0]["업무ID"] == "W18-003"
+    assert items[0]["우선순위"] == "높음"
+    # Non-dict element coerced to full empty-shape dict
+    assert items[1] == {
+        "그룹": "", "파트": "", "업무ID": "", "업무": "",
+        "마감": "", "우선순위": "",
+    }
+
+
 def test_run_compile_normalizes_nested_item_fields(tmp_path: Path):
     """Defense-in-depth: 지난주.항목[*] / 이번주.항목[*] / 그룹장_확인필요[*]
     each have list-typed sub-fields the dashboard iterates over (Jinja

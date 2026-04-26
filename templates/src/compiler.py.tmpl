@@ -188,10 +188,12 @@ def _build_user_prompt(team_name: str, week: str, parts_data: Dict[str, Dict[str
         lines.append(f"### 그룹: {group_name}")
         for part_name, data in parts:
             lines.append(f"파트: {part_name}")
-            if data.get("미작성"):
-                lines.append("(미작성)")
-                lines.append("")
-                continue
+            unwritten = bool(data.get("미작성"))
+            if unwritten:
+                # Still surface the queued rows so the group lead can see
+                # what's pending in 미작성 parts. Mark them clearly so the
+                # LLM puts them under 미응답_배정항목 (not 이번주.항목).
+                lines.append("(미작성 — 파트장이 아무것도 채우지 않음)")
             lines.append("[지난주]")
             if data["지난주"]:
                 for r in data["지난주"]:
@@ -262,6 +264,21 @@ def _normalize_compile_output(data: Any) -> Dict[str, Any]:
             "희망기한": _str(raw.get("희망기한")),
         }
 
+    def _normalize_unanswered(raw) -> dict:
+        # Slim shape — just the fields the dashboard needs to surface a
+        # queued-but-untouched task (no 처리결과/이슈/액션 since the lead
+        # never answered).
+        if not isinstance(raw, dict):
+            raw = {}
+        return {
+            "그룹": _str(raw.get("그룹")),
+            "파트": _str(raw.get("파트")),
+            "업무ID": _str(raw.get("업무ID")),
+            "업무": _str(raw.get("업무")),
+            "마감": _str(raw.get("마감")),
+            "우선순위": _str(raw.get("우선순위")),
+        }
+
     def _normalize_group_summary(value) -> dict:
         out = {}
         if not isinstance(value, dict):
@@ -296,6 +313,9 @@ def _normalize_compile_output(data: Any) -> Dict[str, Any]:
             _normalize_check_item(it) for it in _list(data.get("그룹장_확인필요"))
         ],
         "미작성_파트": [_str(p) for p in _list(data.get("미작성_파트"))],
+        "미응답_배정항목": [
+            _normalize_unanswered(it) for it in _list(data.get("미응답_배정항목"))
+        ],
         "주의사항": [_str(n) for n in _list(data.get("주의사항"))],
     }
 
