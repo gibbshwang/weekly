@@ -188,7 +188,7 @@
     <h2 id="summary-heading">종합 요약</h2>
     <div class="summary">
       <strong>이번 주 핵심</strong>
-      {{ result.부서_종합_요약 | replace('\n', '<br>') | safe }}
+      {{ result.부서_종합_요약 | nl2br }}
     </div>
     {% if result.미작성_파트 %}
     <p class="missing-notice" role="alert">

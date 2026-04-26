@@ -160,3 +160,90 @@ def test_dashboard_no_external_resources(tmp_path: Path):
         if "src=" in tag or "href=" in tag:
             # Must be relative/anchor only, not http/https/cdn
             assert not re.search(r'(?:src|href)="(?:https?://|//cdn)', tag), f"External resource: {tag}"
+
+
+# --- XSS hardening (FIX-01) ---
+
+_XSS_PAYLOAD = "<script>alert(1)</script>"
+_XSS_ESCAPED = "&lt;script&gt;alert(1)&lt;/script&gt;"
+
+
+def test_xss_in_summary_is_escaped(tmp_path: Path):
+    """LLM-produced summary content must be HTML-escaped, not rendered as live HTML."""
+    dashboard = _load_dashboard(tmp_path)
+    result = {
+        "부서_종합_요약": f"안녕하세요 {_XSS_PAYLOAD} 끝.",
+        "파트별_핵심": {}, "진척률": {}, "미작성_파트": [], "주의사항": [],
+    }
+    html = dashboard.render_dashboard(
+        result=result, dept_name="기획팀", week="2026-W18",
+        template_path=PROJECT_ROOT / "templates/template_dashboard.html.j2",
+    )
+    assert _XSS_PAYLOAD not in html, "Raw <script> tag leaked through into output"
+    assert _XSS_ESCAPED in html, "Summary should be HTML-escaped"
+
+
+def test_xss_in_dept_name_is_escaped(tmp_path: Path):
+    """Even though FIX-07 validates dept_name, the renderer must escape defensively."""
+    dashboard = _load_dashboard(tmp_path)
+    result = {
+        "부서_종합_요약": "x", "파트별_핵심": {}, "진척률": {},
+        "미작성_파트": [], "주의사항": [],
+    }
+    html = dashboard.render_dashboard(
+        result=result, dept_name=_XSS_PAYLOAD, week="2026-W18",
+        template_path=PROJECT_ROOT / "templates/template_dashboard.html.j2",
+    )
+    assert _XSS_PAYLOAD not in html
+
+
+def test_xss_in_part_name_is_escaped(tmp_path: Path):
+    """Part name keys in 파트별_핵심 / 진척률 dicts must be escaped."""
+    dashboard = _load_dashboard(tmp_path)
+    result = {
+        "부서_종합_요약": "x",
+        "파트별_핵심": {
+            _XSS_PAYLOAD: {"주요_성과": [], "주요_이슈": [], "차주_계획": [], "리스크": []}
+        },
+        "진척률": {_XSS_PAYLOAD: 50},
+        "미작성_파트": [], "주의사항": [],
+    }
+    html = dashboard.render_dashboard(
+        result=result, dept_name="기획팀", week="2026-W18",
+        template_path=PROJECT_ROOT / "templates/template_dashboard.html.j2",
+    )
+    assert _XSS_PAYLOAD not in html
+
+
+def test_xss_in_warnings_list_is_escaped(tmp_path: Path):
+    """주의사항 list items come from LLM output and must be escaped."""
+    dashboard = _load_dashboard(tmp_path)
+    result = {
+        "부서_종합_요약": "x", "파트별_핵심": {}, "진척률": {},
+        "미작성_파트": [],
+        "주의사항": [_XSS_PAYLOAD],
+    }
+    html = dashboard.render_dashboard(
+        result=result, dept_name="기획팀", week="2026-W18",
+        template_path=PROJECT_ROOT / "templates/template_dashboard.html.j2",
+    )
+    assert _XSS_PAYLOAD not in html
+
+
+def test_summary_newlines_become_br_after_escape(tmp_path: Path):
+    """Summary should still convert real \\n to <br>, but only AFTER escaping
+    other characters — so attacker-controlled content can't synthesize new tags."""
+    dashboard = _load_dashboard(tmp_path)
+    result = {
+        "부서_종합_요약": "첫 줄\n둘째 줄\n<b>세째 줄 with HTML</b>",
+        "파트별_핵심": {}, "진척률": {}, "미작성_파트": [], "주의사항": [],
+    }
+    html = dashboard.render_dashboard(
+        result=result, dept_name="기획팀", week="2026-W18",
+        template_path=PROJECT_ROOT / "templates/template_dashboard.html.j2",
+    )
+    # Real newlines become <br>
+    assert "첫 줄<br>둘째 줄<br>" in html
+    # But the <b> tag is escaped, not rendered
+    assert "<b>세째 줄 with HTML</b>" not in html
+    assert "&lt;b&gt;세째 줄 with HTML&lt;/b&gt;" in html

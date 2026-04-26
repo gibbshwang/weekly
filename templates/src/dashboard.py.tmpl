@@ -7,7 +7,29 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict
 
-from jinja2 import Template
+from jinja2 import Environment, FileSystemLoader, select_autoescape
+from markupsafe import Markup, escape
+
+
+def _nl2br_safe(value: Any) -> Markup:
+    """Escape value, then convert real \\n to <br>.
+
+    The previous template used `value | replace('\\n', '<br>') | safe`, which
+    is a forge: any HTML the LLM happened to emit (or that prompt-injection
+    coerced it to emit) would be rendered live. By escaping first and only
+    inserting trusted <br> markup afterwards, attacker-controlled input can
+    never synthesize a real tag.
+    """
+    return Markup(str(escape(value)).replace("\n", "<br>"))
+
+
+def _build_env(template_dir: Path) -> Environment:
+    env = Environment(
+        loader=FileSystemLoader(str(template_dir)),
+        autoescape=select_autoescape(["html", "j2", "html.j2"], default=True),
+    )
+    env.filters["nl2br"] = _nl2br_safe
+    return env
 
 
 def render_dashboard(
@@ -18,7 +40,9 @@ def render_dashboard(
     weekly_version: str = "0.1.0",
 ) -> str:
     """Render the dashboard HTML from a compile result dict."""
-    tmpl = Template(template_path.read_text(encoding="utf-8"))
+    template_path = Path(template_path)
+    env = _build_env(template_path.parent)
+    tmpl = env.get_template(template_path.name)
     return tmpl.render(
         result=result,
         dept_name=dept_name,
