@@ -1,18 +1,22 @@
-"""Tests for schedule_install.py — Stage 7 cron task registration."""
+"""Tests for schedule_install.py — registers prepare/assign/compile cron tasks."""
 import json
 import sys
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+
+import pytest
+
 from scripts.schedule_install import register_cron_tasks
-from scripts.scope import ScopeAnswers, PartLeadAnswer
+from scripts.scope import TeamScopeAnswers, GroupScopeAnswer, PartScopeAnswer
 
 
 def _answers(tmp_path):
-    return ScopeAnswers(
-        dept_name="기획팀",
-        parts=["전략기획"],
-        group_lead_name="x", group_lead_email="x@e.com",
-        part_leads=[PartLeadAnswer(part="전략기획", name="x", email="x@e.com")],
+    return TeamScopeAnswers(
+        team_name="기획팀",
+        team_lead_name="x", team_lead_email="x@e.com",
+        groups=[GroupScopeAnswer(
+            name="g1", lead_name="x", lead_email="x@e.com",
+            parts=[PartScopeAnswer(name="p1", lead_name="x", lead_email="x@e.com")],
+        )],
         storage_type="local", storage_root=str(tmp_path),
         smtp_host="smtp", smtp_port=587, smtp_use_tls=True,
         smtp_user="x@x.com", smtp_password="x",
@@ -40,7 +44,7 @@ def _setup_fake_runtime(project_root: Path):
     )
 
 
-def test_register_cron_tasks_installs_two(tmp_path, monkeypatch):
+def test_register_cron_tasks_installs_three(tmp_path):
     project_root = tmp_path / "project"
     project_root.mkdir()
     _setup_fake_runtime(project_root)
@@ -48,20 +52,21 @@ def test_register_cron_tasks_installs_two(tmp_path, monkeypatch):
     register_cron_tasks(
         project_root=project_root,
         answers=_answers(tmp_path),
+        prepare_cron="0 6 * * 1",
         assign_cron="0 * * * *",
         compile_cron="0 17 * * 5",
     )
 
-    # Read the calls from the JSON file that the fake scheduler wrote
-    calls_file = project_root / "scheduler_calls.json"
-    assert calls_file.exists(), "scheduler_calls.json not created"
-    calls = json.loads(calls_file.read_text(encoding="utf-8"))
-
-    assert len(calls) == 2
+    calls = json.loads((project_root / "scheduler_calls.json").read_text(encoding="utf-8"))
+    assert len(calls) == 3
     names = {c["name"] for c in calls}
-    assert "weekly-기획팀-assign" in names
-    assert "weekly-기획팀-compile" in names
+    assert names == {
+        "weekly-기획팀-prepare",
+        "weekly-기획팀-assign",
+        "weekly-기획팀-compile",
+    }
     crons = {c["name"]: c["cron"] for c in calls}
+    assert crons["weekly-기획팀-prepare"] == "0 6 * * 1"
     assert crons["weekly-기획팀-assign"] == "0 * * * *"
     assert crons["weekly-기획팀-compile"] == "0 17 * * 5"
 
@@ -72,52 +77,35 @@ def test_register_cron_tasks_uses_platform_appropriate_wreport(tmp_path, monkeyp
     _setup_fake_runtime(project_root)
 
     monkeypatch.setattr(sys, "platform", "win32")
-
     register_cron_tasks(project_root=project_root, answers=_answers(tmp_path))
 
-    # Read the calls from the JSON file
-    calls_file = project_root / "scheduler_calls.json"
-    assert calls_file.exists(), "scheduler_calls.json not created"
-    calls = json.loads(calls_file.read_text(encoding="utf-8"))
-
-    # Windows: wreport.exe in venv/Scripts/
+    calls = json.loads((project_root / "scheduler_calls.json").read_text(encoding="utf-8"))
     for c in calls:
         assert "venv" in c["command"]
         assert "wreport" in c["command"]
         assert ".exe" in c["command"]
 
 
-# --- dept_name validation amplifier (FIX-03 amplifier) ---
-
-import pytest
-
-
-@pytest.mark.parametrize("bad_dept", [
+@pytest.mark.parametrize("bad_team", [
     'foo" & calc.exe & echo "',
     "../../etc",
     "name with space",
     "foo\nbar",
     "foo;rm -rf /",
 ])
-def test_register_cron_rejects_dangerous_dept_name(tmp_path, bad_dept):
-    """schedule_install must reject hostile dept_name before letting it flow
-    into the cron command line. The downstream scheduler validates too, but
-    catching it here gives a clearer error and prevents partial state."""
+def test_register_cron_rejects_dangerous_team_name(tmp_path, bad_team):
+    """schedule_install must reject hostile team_name before letting it flow
+    into the cron command line."""
     project_root = tmp_path / "project"
     project_root.mkdir()
     _setup_fake_runtime(project_root)
 
     answers = _answers(tmp_path)
-    # bypass ScopeAnswers' own validation (if any) by replacing the field
-    object.__setattr__(answers, "dept_name", bad_dept)
+    object.__setattr__(answers, "team_name", bad_team)
 
     with pytest.raises(ValueError):
-        register_cron_tasks(
-            project_root=project_root, answers=answers,
-            assign_cron="0 * * * *", compile_cron="0 17 * * 5",
-        )
+        register_cron_tasks(project_root=project_root, answers=answers)
 
-    # No partial install — scheduler_calls.json should not exist or be empty
     calls_file = project_root / "scheduler_calls.json"
     if calls_file.exists():
         calls = json.loads(calls_file.read_text(encoding="utf-8"))

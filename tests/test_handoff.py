@@ -9,7 +9,7 @@ def test_generate_readme(tmp_path: Path):
     generate_readme(
         target=target,
         bundle_root=bundle_root,
-        dept_name="기획팀",
+        team_name="기획팀",
         project_path=str(target),
         storage_root="C:/weekly-test",
     )
@@ -21,9 +21,9 @@ def test_generate_readme(tmp_path: Path):
 
 def test_print_summary_returns_actionable_text(tmp_path: Path):
     target = tmp_path / "project"
-    text = print_summary(target=target, dept_name="기획팀", storage_root="C:/weekly-test")
-    # Must mention next-step commands
-    assert "wreport compile" in text
+    text = print_summary(target=target, team_name="기획팀", storage_root="C:/weekly-test")
+    assert "wreport compile" in text or "wreport prepare" in text
     assert "기획팀" in text
     assert "_지시사항.xlsx" in text
-    assert "<파트>.md" in text or "파트.md" in text
+    # Phase 2 mentions xlsx for parts (md is gone)
+    assert ".xlsx" in text

@@ -2,21 +2,19 @@
 
 Loaded from `config.yaml` at the project root (the directory `wreport` is invoked from).
 
-Phase 2 (2026-04-26) introduces a 3-level org hierarchy: Team → Group → Part.
-The legacy Department / PartLead form continues to load during the transition
-window; consumers (assigner / compiler / dashboard / mailer) migrate to `team`
-in Wave B/C/D/E and the legacy form is removed in the final cleanup wave.
+Phase 2 (2026-04-26): Team → Group → Part hierarchy is the only supported form.
+Legacy Department / PartLead were removed in the Wave E cleanup.
 """
 import re
 from pathlib import Path
 from typing import Iterator, List, Literal, Optional, Tuple
 import yaml
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator
 
 
-# Department / part names land in three sensitive places:
-#   1. filesystem path joins (storage root, .md filenames, dashboard output)
-#   2. cron command interpolation (wreport assign <name>)
+# Team / group / part names land in three sensitive places:
+#   1. filesystem path joins (storage root, .xlsx filenames, dashboard output)
+#   2. cron command interpolation (wreport prepare/assign/compile <name>)
 #   3. Excel DataValidation list source
 # Restrict to a slug-friendly charset that's safe for all three. Korean,
 # alphanumeric, underscore, hyphen — nothing that needs shell, path, or
@@ -35,40 +33,9 @@ def _validate_safe_name(value: str, label: str) -> str:
     return value
 
 
-class Department(BaseModel):
-    name: str
-    parts: List[str]
-
-    @field_validator("name")
-    @classmethod
-    def _check_name(cls, v: str) -> str:
-        return _validate_safe_name(v, "department.name")
-
-    @field_validator("parts")
-    @classmethod
-    def _check_parts(cls, v: List[str]) -> List[str]:
-        if not v:
-            raise ValueError("department.parts must not be empty")
-        return [_validate_safe_name(p, "department.parts[]") for p in v]
-
-
 class Person(BaseModel):
     name: str
     email: str  # plain str — allow non-RFC compliant test addresses
-
-
-class PartLead(BaseModel):
-    part: str
-    name: str
-    email: str
-
-    @field_validator("part")
-    @classmethod
-    def _check_part(cls, v: str) -> str:
-        return _validate_safe_name(v, "part_leads[].part")
-
-
-# --- Phase 2: Team → Group → Part hierarchy ---
 
 
 class Part(BaseModel):
@@ -150,8 +117,8 @@ class StorageConfig(BaseModel):
 class ScheduleConfig(BaseModel):
     assign_cron: str
     compile_cron: str
-    # Phase 2: prepare runs Monday morning to set up the new week's part
-    # workbooks (and carry-forward incomplete items from the prior week).
+    # prepare runs Monday morning to set up the new week's part workbooks
+    # (and carry-forward incomplete items from the prior week).
     # Default = every Monday at 06:00.
     prepare_cron: str = "0 6 * * 1"
     timezone: str = "Asia/Seoul"
@@ -176,50 +143,12 @@ class PromptsConfig(BaseModel):
 
 
 class WeeklyConfig(BaseModel):
-    # Both org forms are optional individually; the model_validator below
-    # requires exactly one (legacy department or new team). The legacy form
-    # is preserved during the Phase 2 transition; consumers migrate one
-    # subsystem at a time and the legacy fields disappear in the cleanup wave.
-    department: Optional[Department] = None
-    group_lead: Optional[Person] = None
-    part_leads: Optional[List[PartLead]] = None
-    team: Optional[Team] = None
-
+    team: Team
     storage: StorageConfig
     schedule: ScheduleConfig
     smtp: SMTPConfig
     ai: AIConfig
     prompts: PromptsConfig = Field(default_factory=PromptsConfig)
-
-    @model_validator(mode="after")
-    def _exactly_one_org_form(self) -> "WeeklyConfig":
-        legacy_present = (
-            self.department is not None
-            or self.group_lead is not None
-            or self.part_leads is not None
-        )
-        if self.team is None and not legacy_present:
-            raise ValueError(
-                "config must include either `team` (Phase 2) or "
-                "`department`+`group_lead`+`part_leads` (legacy)"
-            )
-        if self.team is not None and legacy_present:
-            raise ValueError(
-                "config must NOT mix Phase 2 `team` with legacy "
-                "`department`/`group_lead`/`part_leads`"
-            )
-        if legacy_present:
-            # Legacy form: all three legacy fields must appear together
-            if not (
-                self.department is not None
-                and self.group_lead is not None
-                and self.part_leads is not None
-            ):
-                raise ValueError(
-                    "legacy form requires `department`, `group_lead`, AND "
-                    "`part_leads` — partial legacy config is not accepted"
-                )
-        return self
 
 
 def load_config(path: Path) -> WeeklyConfig:

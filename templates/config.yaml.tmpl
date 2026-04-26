@@ -1,20 +1,24 @@
-department:
-  name: "{{ dept_name }}"
-  parts:
-{% for p in parts %}    - "{{ p }}"
-{% endfor %}
-group_lead:
-  name: "{{ group_lead_name }}"
-  email: "{{ group_lead_email }}"
-part_leads:
-{% for pl in part_leads %}  - part: "{{ pl.part }}"
-    name: "{{ pl.name }}"
-    email: "{{ pl.email }}"
-{% endfor %}
+team:
+  name: "{{ team_name }}"
+  lead:
+    name: "{{ team_lead_name }}"
+    email: "{{ team_lead_email }}"
+  groups:
+{% for g in groups %}    - name: "{{ g.name }}"
+      lead:
+        name: "{{ g.lead_name }}"
+        email: "{{ g.lead_email }}"
+      parts:
+{% for p in g.parts %}        - name: "{{ p.name }}"
+          lead:
+            name: "{{ p.lead_name }}"
+            email: "{{ p.lead_email }}"
+{% endfor %}{% endfor %}
 storage:
   type: "{{ storage_type }}"
   root: {{ storage_root | tojson }}
 schedule:
+  prepare_cron: "{{ prepare_cron | default('0 6 * * 1') }}"
   assign_cron: "{{ assign_cron | default('0 * * * *') }}"
   compile_cron: "{{ compile_cron | default('0 17 * * 5') }}"
   timezone: "{{ timezone | default('Asia/Seoul') }}"

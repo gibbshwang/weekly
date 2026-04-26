@@ -7,21 +7,28 @@ from pathlib import Path
 
 from jinja2 import Template
 
-from scripts.scope import ScopeAnswers
+from scripts.scope import TeamScopeAnswers
 
 
-def write_config(answers: ScopeAnswers, target: Path, bundle_root: Path) -> None:
-    """Write config.yaml at `target/config.yaml` from scope answers."""
+def write_config(answers: TeamScopeAnswers, target: Path, bundle_root: Path) -> None:
+    """Write config.yaml at `target/config.yaml` from team scope answers."""
     tmpl_path = Path(bundle_root) / "templates" / "config.yaml.tmpl"
     tmpl = Template(tmpl_path.read_text(encoding="utf-8"))
     ctx = {
-        "dept_name": answers.dept_name,
-        "parts": answers.parts,
-        "group_lead_name": answers.group_lead_name,
-        "group_lead_email": answers.group_lead_email,
-        "part_leads": [
-            {"part": pl.part, "name": pl.name, "email": pl.email}
-            for pl in answers.part_leads
+        "team_name": answers.team_name,
+        "team_lead_name": answers.team_lead_name,
+        "team_lead_email": answers.team_lead_email,
+        "groups": [
+            {
+                "name": g.name,
+                "lead_name": g.lead_name,
+                "lead_email": g.lead_email,
+                "parts": [
+                    {"name": p.name, "lead_name": p.lead_name, "lead_email": p.lead_email}
+                    for p in g.parts
+                ],
+            }
+            for g in answers.groups
         ],
         "storage_type": answers.storage_type,
         "storage_root": answers.storage_root,

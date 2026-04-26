@@ -1,4 +1,4 @@
-"""Stage 2: scaffold — create ~/weekly/<dept>/ + render templates + copy support files.
+"""Stage 2: scaffold — create ~/weekly/<team>/ + render templates + copy support files.
 
 Walks the skill bundle's templates/ tree, renders .tmpl files with the simple
 {{ var }} substitution from scripts.lib.template_render, and copies fixture
@@ -19,14 +19,14 @@ from scripts.lib.template_render import render_string
 
 # Files in templates/src/prompts/ stay as raw text at runtime — the compiler
 # Jinja2-renders them with actual ctx, so scaffold just copies them and
-# strips the .tmpl suffix (compile_system.txt.tmpl -> compile_system.txt).
+# strips the .tmpl suffix (compile_system_v2.txt.tmpl -> compile_system_v2.txt).
 PROMPT_TMPL_DIR = "prompts"
 
 
 def scaffold_project(
     target: Path,
-    dept_slug: str,
-    dept_name: str,
+    team_slug: str,
+    team_name: str,
     bundle_root: Path,
     install_pkg: bool = True,
 ) -> None:
@@ -35,11 +35,12 @@ def scaffold_project(
     Parameters
     ----------
     target : Path
-        Destination directory (e.g. ``~/weekly/<dept>``). Created if missing.
-    dept_slug : str
+        Destination directory (e.g. ``~/weekly/<team>``). Created if missing.
+    team_slug : str
         ASCII slug used as the package distribution name suffix.
-    dept_name : str
-        Human-readable Korean department name; used in pyproject description.
+    team_name : str
+        Human-readable Korean team name; used in pyproject description and
+        the README.
     bundle_root : Path
         Path to the ``skills/weekly`` bundle (where templates/ + scripts/ live).
     install_pkg : bool
@@ -49,7 +50,7 @@ def scaffold_project(
     bundle_root = Path(bundle_root)
     target.mkdir(parents=True, exist_ok=True)
 
-    ctx: dict[str, str] = {"dept_slug": dept_slug, "dept_name": dept_name}
+    ctx: dict[str, str] = {"team_slug": team_slug, "team_name": team_name}
 
     # 1. Render top-level templates: pyproject.toml, requirements.txt, .gitignore
     for name in ("pyproject.toml.tmpl", "requirements.txt.tmpl", ".gitignore.tmpl"):
@@ -80,12 +81,12 @@ def scaffold_project(
     llm_src = bundle_root / "scripts" / "lib" / "llm_call.py"
     (pkg / "_llm.py").write_text(llm_src.read_text(encoding="utf-8"), encoding="utf-8")
 
-    # 4. Copy template_dashboard.html.j2 -> weekly_runtime/templates/.
+    # 4. Copy template_dashboard_v2.html.j2 -> weekly_runtime/templates/.
     pkg_templates = pkg / "templates"
     pkg_templates.mkdir(parents=True, exist_ok=True)
     shutil.copy(
-        bundle_root / "templates" / "template_dashboard.html.j2",
-        pkg_templates / "template_dashboard.html.j2",
+        bundle_root / "templates" / "template_dashboard_v2.html.j2",
+        pkg_templates / "template_dashboard_v2.html.j2",
     )
 
     # 5. Copy prompt templates -> weekly_runtime/prompts/ (rename .tmpl -> .txt).
@@ -97,7 +98,6 @@ def scaffold_project(
         for prompt_file in src_prompts.iterdir():
             if prompt_file.suffix != ".tmpl":
                 continue
-            # compile_system.txt.tmpl -> compile_system.txt
             stem = prompt_file.stem
             out_name = stem if stem.endswith(".txt") else f"{stem}.txt"
             shutil.copy(prompt_file, pkg_prompts / out_name)

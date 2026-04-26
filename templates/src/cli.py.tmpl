@@ -1,14 +1,18 @@
 """wreport — Click CLI for the generated weekly_runtime project.
 
-Phase 0 commands: init (stub), compile (end-to-end).
-Phase 1 commands: assign, status, schedule install/uninstall/status.
-Phase 2 commands: prepare (new-week initialization with carry-forward).
+Phase 2 commands:
+  init     — stub pointing back to the harness
+  prepare  — Monday morning: create week folder + part workbooks + carry-forward
+  assign   — every-hour tick: read 지시사항.xlsx and route new rows to part workbooks
+  compile  — Friday: render the team dashboard from part workbooks and email it
+  status   — quick check of which parts have data this week
+  schedule install/uninstall/status — register/inspect the OS-side cron tasks
 
 AI calls go through Codex CLI or Gemini CLI subprocess (no API keys).
 SMTP password is loaded from OS keyring at compile time.
 """
 import sys
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Optional
 
@@ -16,127 +20,21 @@ import click
 
 from .config import load_config
 from .keyring_helper import get_secret
-from .storage import LocalStorage
-from .compiler import collect_parts, run_compile, collect_parts_v2, run_compile_v2
-from .dashboard import render_dashboard, render_dashboard_v2
+from .compiler import collect_parts, run_compile
+from .dashboard import render_dashboard
 from .mailer import send_compile_mail
 from .llm_client import get_llm_client
-from .assigner import run_assign, run_assign_v2
+from .assigner import run_assign
 from .status import compute_status, format_status_report
 from .scheduler import install_task, uninstall_task, list_tasks
 from .audit import log_event
-from .excel import read_instructions, read_instructions_v2
+from .excel import read_instructions
 from .prepare import prepare_new_week
 
 
 @click.group()
 def cli() -> None:
     """wreport — Weekly Report Automation Harness runtime CLI."""
-
-
-@cli.command("init")
-@click.argument("dept", type=str)
-def init_cmd(dept: str) -> None:
-    """Re-run the /weekly init pipeline.
-
-    Phase 0 stub: prints a message instructing the user to invoke `/weekly init <dept>`
-    via their CLI host (Claude Code/Codex/Gemini). The actual scaffold is in the skill
-    bundle, not this binary.
-    """
-    click.echo(
-        f"To initialize a new department, invoke `/weekly init {dept}` in your CLI host "
-        f"(Claude Code/Codex CLI/Gemini CLI).\n"
-        f"This binary (`wreport`) is for post-scaffold operations only.\n"
-        f"If you want to *re-scaffold* this department, ask the host CLI to re-run /weekly init."
-    )
-
-
-@cli.command("compile")
-@click.argument("dept", type=str)
-@click.option("--week", "week_str", type=str, default=None,
-              help="ISO week, e.g. 2026-W18. Defaults to current week.")
-@click.option("--config", "config_path", type=click.Path(path_type=Path), default=None,
-              help="Path to config.yaml. Defaults to ./config.yaml from the project root.")
-@click.option("--dry-run", is_flag=True, default=False,
-              help="Generate dashboard but skip mail send.")
-def compile_cmd(dept: str, week_str: Optional[str], config_path: Optional[Path], dry_run: bool) -> None:
-    """Compile this week's reports → dashboard → email."""
-    cfg = _load_cfg(config_path)
-    week = week_str or _current_iso_week()
-    if cfg.team is not None:
-        return _compile_v2(cfg, week=week, dry_run=dry_run, team_arg=dept)
-    if cfg.department.name != dept:
-        click.echo(f"WARN: dept arg '{dept}' != config.department.name '{cfg.department.name}'", err=True)
-
-    click.echo(f"Compiling {cfg.department.name} {week}...")
-
-    # Storage points to the dept's data root inside the configured storage.root
-    storage_root = Path(cfg.storage.root) / cfg.department.name
-    storage = LocalStorage(root=storage_root)
-    md_dir = storage_root / week
-
-    parts_data = collect_parts(md_dir, cfg.department.parts)
-
-    # LLM: validates binary at construction (codex or gemini CLI must be in PATH)
-    llm = get_llm_client(provider=cfg.ai.provider, model=cfg.ai.model_compile)
-
-    # Resolve prompt template path: project ships it at weekly_runtime/prompts/
-    prompt_path = Path(__file__).parent / "prompts" / "compile_system.txt"
-    if not prompt_path.exists():
-        # Fallback to project root templates dir
-        prompt_path = Path.cwd() / "weekly_runtime" / "prompts" / "compile_system.txt"
-    result = run_compile(
-        llm=llm,
-        dept_name=cfg.department.name,
-        parts=cfg.department.parts,
-        week=week,
-        parts_data=parts_data,
-        prompt_template_path=prompt_path,
-    )
-
-    # Resolve dashboard template path
-    dashboard_tmpl = Path(__file__).parent / "templates" / "template_dashboard.html.j2"
-    if not dashboard_tmpl.exists():
-        dashboard_tmpl = Path.cwd() / "weekly_runtime" / "templates" / "template_dashboard.html.j2"
-    html = render_dashboard(
-        result=result,
-        dept_name=cfg.department.name,
-        week=week,
-        template_path=dashboard_tmpl,
-    )
-
-    out_path = md_dir / "_dashboard.html"
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(html, encoding="utf-8")
-    click.echo(f"Dashboard: {out_path}")
-
-    if dry_run:
-        click.echo("Dry run — skipping mail.")
-        return
-
-    # SMTP password from OS keyring (only secret we still store)
-    smtp_password = get_secret(f"weekly-{cfg.department.name}", "smtp_password")
-    cc = [pl.email for pl in cfg.part_leads]
-    send_compile_mail(
-        host=cfg.smtp.host,
-        port=cfg.smtp.port,
-        use_tls=cfg.smtp.use_tls,
-        user=cfg.smtp.user,
-        password=smtp_password,
-        sender=cfg.smtp.user,
-        to=[cfg.group_lead.email],
-        cc=cc,
-        subject=f"{cfg.department.name} 주간보고 {week}",
-        body_text=(
-            f"{cfg.department.name} {week} 보고 첨부합니다.\n\n"
-            f"종합 요약:\n{result.get('부서_종합_요약', '')}\n\n"
-            f"전체 내용은 첨부 _dashboard.html을 확인해주세요.\n\n"
-            f"미작성 파트: {', '.join(result.get('미작성_파트', [])) or '없음'}\n"
-        ),
-        attachment_path=out_path,
-        attachment_name="_dashboard.html",
-    )
-    click.echo("Mail sent.")
 
 
 def _current_iso_week() -> str:
@@ -150,71 +48,26 @@ def _previous_iso_week() -> str:
     return f"{iso_year}-W{iso_week:02d}"
 
 
-def _compile_v2(cfg, week: str, dry_run: bool, team_arg: str) -> None:
-    """Phase 2 compile: xlsx → run_compile_v2 → dashboard_v2 → email.
+def _load_cfg(config_path):
+    """Resolve config.yaml path (default: ./config.yaml) and load it."""
+    return load_config(config_path or Path.cwd() / "config.yaml")
 
-    Mail recipients per agreed B1 routing:
-      to = 팀장
-      cc = 그룹장들 + 파트장들 (de-duplicated, preserving order)
+
+@cli.command("init")
+@click.argument("team", type=str)
+def init_cmd(team: str) -> None:
+    """Re-run the /weekly init pipeline.
+
+    Stub: prints a message instructing the user to invoke `/weekly init <team>`
+    via their CLI host (Claude Code/Codex/Gemini). The actual scaffold is in
+    the skill bundle, not this binary.
     """
-    if cfg.team.name != team_arg:
-        click.echo(f"WARN: team arg '{team_arg}' != config.team.name '{cfg.team.name}'", err=True)
-    click.echo(f"Compiling {cfg.team.name} {week} (Phase 2)...")
-
-    week_dir = Path(cfg.storage.root) / cfg.team.name / week
-    parts_data = collect_parts_v2(week_dir, cfg.team)
-
-    llm = get_llm_client(provider=cfg.ai.provider, model=cfg.ai.model_compile)
-
-    prompt_path = Path(__file__).parent / "prompts" / "compile_system_v2.txt"
-    if not prompt_path.exists():
-        prompt_path = Path.cwd() / "weekly_runtime" / "prompts" / "compile_system_v2.txt"
-
-    result = run_compile_v2(
-        llm=llm, team=cfg.team, week=week,
-        parts_data=parts_data, prompt_template_path=prompt_path,
+    click.echo(
+        f"To initialize a new team, invoke `/weekly init {team}` in your CLI host "
+        f"(Claude Code/Codex CLI/Gemini CLI).\n"
+        f"This binary (`wreport`) is for post-scaffold operations only.\n"
+        f"If you want to *re-scaffold* this team, ask the host CLI to re-run /weekly init."
     )
-
-    dashboard_tmpl = Path(__file__).parent / "templates" / "template_dashboard_v2.html.j2"
-    if not dashboard_tmpl.exists():
-        dashboard_tmpl = Path.cwd() / "weekly_runtime" / "templates" / "template_dashboard_v2.html.j2"
-    html = render_dashboard_v2(
-        result=result, team_name=cfg.team.name, week=week,
-        template_path=dashboard_tmpl,
-    )
-
-    out_path = week_dir / "_dashboard.html"
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(html, encoding="utf-8")
-    click.echo(f"Dashboard: {out_path}")
-
-    if dry_run:
-        click.echo("Dry run — skipping mail.")
-        return
-
-    smtp_password = get_secret(f"weekly-{cfg.team.name}", "smtp_password")
-    # to = team lead; cc = group leads + part leads (dedup, preserve order)
-    cc_seen = set()
-    cc_list = []
-    for email in cfg.team.all_group_lead_emails() + cfg.team.all_part_lead_emails():
-        if email and email not in cc_seen:
-            cc_list.append(email)
-            cc_seen.add(email)
-    send_compile_mail(
-        host=cfg.smtp.host, port=cfg.smtp.port, use_tls=cfg.smtp.use_tls,
-        user=cfg.smtp.user, password=smtp_password, sender=cfg.smtp.user,
-        to=[cfg.team.lead.email], cc=cc_list,
-        subject=f"{cfg.team.name} 주간보고 {week}",
-        body_text=(
-            f"{cfg.team.name} {week} 보고 첨부합니다.\n\n"
-            f"종합 요약:\n{result.get('팀_종합_요약', '')}\n\n"
-            f"전체 내용은 첨부 _dashboard.html을 확인해주세요.\n\n"
-            f"미작성 파트: {', '.join(result.get('미작성_파트', [])) or '없음'}\n"
-        ),
-        attachment_path=out_path,
-        attachment_name="_dashboard.html",
-    )
-    click.echo("Mail sent.")
 
 
 @cli.command("prepare")
@@ -228,20 +81,8 @@ def _compile_v2(cfg, week: str, dry_run: bool, team_arg: str) -> None:
                    "Defaults to current_week - 7d. Pass empty string for first-week setup.")
 def prepare_cmd(team: str, config_path: Optional[Path],
                 week_str: Optional[str], prev_week_str: Optional[str]) -> None:
-    """Phase 2 — initialize a new weekly cycle with carry-forward.
-
-    Run on Monday morning (cron). Creates the week folder, generates a
-    workbook for every (group, part) pair, and carries forward incomplete
-    items from the previous week's part workbooks.
-    """
+    """Initialize a new weekly cycle: folder + workbooks + carry-forward."""
     cfg = _load_cfg(config_path)
-    if cfg.team is None:
-        click.echo(
-            "ERROR: `wreport prepare` requires the Phase 2 `team` block in config.yaml. "
-            "Legacy `department` configs must migrate to `team` first.",
-            err=True,
-        )
-        sys.exit(2)
     if cfg.team.name != team:
         click.echo(
             f"WARN: team arg '{team}' != config.team.name '{cfg.team.name}'", err=True,
@@ -273,81 +114,16 @@ def prepare_cmd(team: str, config_path: Optional[Path],
     click.echo(f"  → {summary['week_dir']}")
 
 
-def _load_cfg(config_path):
-    """Resolve config.yaml path (default: ./config.yaml) and load it."""
-    return load_config(config_path or Path.cwd() / "config.yaml")
-
-
 @cli.command("assign")
-@click.argument("dept", type=str)
+@click.argument("team", type=str)
 @click.option("--config", "config_path", type=click.Path(path_type=Path), default=None)
 @click.option("--week", "week_str", type=str, default=None)
-def assign_cmd(dept: str, config_path, week_str) -> None:
-    """One assign tick — diff xlsx, infer parts, append to <part>.md, mail affected leads."""
+def assign_cmd(team: str, config_path, week_str) -> None:
+    """One assign tick — diff 지시사항.xlsx, route new rows to part workbooks, mail leads."""
     cfg = _load_cfg(config_path)
     week = week_str or _current_iso_week()
-    if cfg.team is not None:
-        return _assign_v2(cfg, week=week, team_arg=dept)
-    storage_root = Path(cfg.storage.root) / cfg.department.name
-    xlsx_path = storage_root / "_지시사항.xlsx"
-    if not xlsx_path.exists():
-        click.echo(f"No instructions xlsx at {xlsx_path}, skipping.", err=True)
-        return
-    state_path = storage_root / week / "_assignments_state.json"
-    md_dir = storage_root / week
-    audit_log = storage_root / "logs" / "audit.jsonl"
-
-    rows = read_instructions(xlsx_path)
-    llm = get_llm_client(provider=cfg.ai.provider, model=cfg.ai.model_assign)
-
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
-
-    # Resolve assign prompt path: shipped at weekly_runtime/prompts/assign_system.txt
-    prompt_path = Path(__file__).parent / "prompts" / "assign_system.txt"
-    if not prompt_path.exists():
-        prompt_path = Path(__file__).parent / "prompts" / "assign_system.txt.tmpl"
-
-    affected = run_assign(
-        rows=rows,
-        parts=cfg.department.parts,
-        state_path=state_path,
-        md_dir=md_dir,
-        llm=llm,
-        dept_name=cfg.department.name,
-        prompt_template_path=prompt_path,
-        timestamp=timestamp,
-    )
-
-    log_event(
-        audit_log, "assign",
-        week=week, rows=len(rows),
-        affected_parts=list(affected.keys()),
-    )
-
-    if not affected:
-        click.echo("No new/modified rows.")
-        return
-
-    smtp_password = get_secret(f"weekly-{cfg.department.name}", "smtp_password")
-    affected_emails = [pl.email for pl in cfg.part_leads if pl.part in affected]
-    body_lines = [f"  - {p}: row {idx_list}" for p, idx_list in affected.items()]
-    body = (f"이번 시간 추가된 지시 {sum(len(v) for v in affected.values())}건:\n\n"
-            + "\n".join(body_lines))
-    send_compile_mail(
-        host=cfg.smtp.host, port=cfg.smtp.port, use_tls=cfg.smtp.use_tls,
-        user=cfg.smtp.user, password=smtp_password, sender=cfg.smtp.user,
-        to=affected_emails, cc=[],
-        subject=f"[/weekly] {cfg.department.name} 지시 분배 — {week}",
-        body_text=body,
-    )
-    log_event(audit_log, "assign_mail", week=week, recipients=len(affected_emails))
-    click.echo(f"Assigned to {list(affected.keys())} — {len(affected_emails)} mails sent.")
-
-
-def _assign_v2(cfg, week: str, team_arg: str) -> None:
-    """Phase 2 assign: read v2 xlsx → run_assign_v2 → notify affected part leads."""
-    if cfg.team.name != team_arg:
-        click.echo(f"WARN: team arg '{team_arg}' != config.team.name '{cfg.team.name}'", err=True)
+    if cfg.team.name != team:
+        click.echo(f"WARN: team arg '{team}' != config.team.name '{cfg.team.name}'", err=True)
     storage_root = Path(cfg.storage.root) / cfg.team.name
     xlsx_path = storage_root / "_지시사항.xlsx"
     if not xlsx_path.exists():
@@ -357,21 +133,21 @@ def _assign_v2(cfg, week: str, team_arg: str) -> None:
     state_path = week_dir / "_assignments_state.json"
     audit_log = storage_root / "logs" / "audit.jsonl"
 
-    rows = read_instructions_v2(xlsx_path)
+    rows = read_instructions(xlsx_path)
     llm = get_llm_client(provider=cfg.ai.provider, model=cfg.ai.model_assign)
 
     prompt_path = Path(__file__).parent / "prompts" / "assign_system.txt"
     if not prompt_path.exists():
         prompt_path = Path(__file__).parent / "prompts" / "assign_system.txt.tmpl"
 
-    affected = run_assign_v2(
+    affected = run_assign(
         rows=rows, team=cfg.team, week=week,
         state_path=state_path, part_xlsx_dir=week_dir,
         llm=llm, prompt_template_path=prompt_path,
     )
 
     log_event(
-        audit_log, "assign_v2",
+        audit_log, "assign",
         week=week, rows=len(rows),
         affected_parts=list(affected.keys()),
     )
@@ -398,21 +174,100 @@ def _assign_v2(cfg, week: str, team_arg: str) -> None:
         subject=f"[/weekly] {cfg.team.name} 지시 분배 — {week}",
         body_text=body,
     )
-    log_event(audit_log, "assign_v2_mail", week=week, recipients=len(affected_emails))
+    log_event(audit_log, "assign_mail", week=week, recipients=len(affected_emails))
     click.echo(f"Assigned to {list(affected.keys())} — {len(affected_emails)} mails sent.")
 
 
-@cli.command("status")
-@click.argument("dept", type=str)
-@click.option("--config", "config_path", type=click.Path(path_type=Path), default=None)
-@click.option("--week", "week_str", type=str, default=None)
-def status_cmd(dept, config_path, week_str) -> None:
-    """Show writing progress for the given week."""
+@cli.command("compile")
+@click.argument("team", type=str)
+@click.option("--week", "week_str", type=str, default=None,
+              help="ISO week, e.g. 2026-W18. Defaults to current week.")
+@click.option("--config", "config_path", type=click.Path(path_type=Path), default=None,
+              help="Path to config.yaml. Defaults to ./config.yaml from the project root.")
+@click.option("--dry-run", is_flag=True, default=False,
+              help="Generate dashboard but skip mail send.")
+def compile_cmd(team: str, week_str: Optional[str], config_path: Optional[Path], dry_run: bool) -> None:
+    """Compile this week's reports → dashboard → email.
+
+    Mail recipients per agreed B1 routing:
+      to = 팀장
+      cc = 그룹장들 + 파트장들 (de-duplicated, preserving order)
+    """
     cfg = _load_cfg(config_path)
     week = week_str or _current_iso_week()
-    md_dir = Path(cfg.storage.root) / cfg.department.name / week
-    statuses = compute_status(md_dir, cfg.department.parts)
-    click.echo(format_status_report(statuses, week=week, dept_name=cfg.department.name))
+    if cfg.team.name != team:
+        click.echo(f"WARN: team arg '{team}' != config.team.name '{cfg.team.name}'", err=True)
+    click.echo(f"Compiling {cfg.team.name} {week}...")
+
+    week_dir = Path(cfg.storage.root) / cfg.team.name / week
+    parts_data = collect_parts(week_dir, cfg.team)
+
+    llm = get_llm_client(provider=cfg.ai.provider, model=cfg.ai.model_compile)
+
+    prompt_path = Path(__file__).parent / "prompts" / "compile_system_v2.txt"
+    if not prompt_path.exists():
+        prompt_path = Path.cwd() / "weekly_runtime" / "prompts" / "compile_system_v2.txt"
+
+    result = run_compile(
+        llm=llm, team=cfg.team, week=week,
+        parts_data=parts_data, prompt_template_path=prompt_path,
+    )
+
+    dashboard_tmpl = Path(__file__).parent / "templates" / "template_dashboard_v2.html.j2"
+    if not dashboard_tmpl.exists():
+        dashboard_tmpl = Path.cwd() / "weekly_runtime" / "templates" / "template_dashboard_v2.html.j2"
+    html = render_dashboard(
+        result=result, team_name=cfg.team.name, week=week,
+        template_path=dashboard_tmpl,
+    )
+
+    out_path = week_dir / "_dashboard.html"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(html, encoding="utf-8")
+    click.echo(f"Dashboard: {out_path}")
+
+    if dry_run:
+        click.echo("Dry run — skipping mail.")
+        return
+
+    smtp_password = get_secret(f"weekly-{cfg.team.name}", "smtp_password")
+    cc_seen = set()
+    cc_list = []
+    for email in cfg.team.all_group_lead_emails() + cfg.team.all_part_lead_emails():
+        if email and email not in cc_seen:
+            cc_list.append(email)
+            cc_seen.add(email)
+    send_compile_mail(
+        host=cfg.smtp.host, port=cfg.smtp.port, use_tls=cfg.smtp.use_tls,
+        user=cfg.smtp.user, password=smtp_password, sender=cfg.smtp.user,
+        to=[cfg.team.lead.email], cc=cc_list,
+        subject=f"{cfg.team.name} 주간보고 {week}",
+        body_text=(
+            f"{cfg.team.name} {week} 보고 첨부합니다.\n\n"
+            f"종합 요약:\n{result.get('팀_종합_요약', '')}\n\n"
+            f"전체 내용은 첨부 _dashboard.html을 확인해주세요.\n\n"
+            f"미작성 파트: {', '.join(result.get('미작성_파트', [])) or '없음'}\n"
+        ),
+        attachment_path=out_path,
+        attachment_name="_dashboard.html",
+    )
+    click.echo("Mail sent.")
+
+
+@cli.command("status")
+@click.argument("team", type=str)
+@click.option("--config", "config_path", type=click.Path(path_type=Path), default=None)
+@click.option("--week", "week_str", type=str, default=None)
+def status_cmd(team, config_path, week_str) -> None:
+    """Show writing progress for the given week (which parts have data)."""
+    cfg = _load_cfg(config_path)
+    week = week_str or _current_iso_week()
+    if cfg.team.name != team:
+        click.echo(f"WARN: team arg '{team}' != config.team.name '{cfg.team.name}'", err=True)
+    week_dir = Path(cfg.storage.root) / cfg.team.name / week
+    part_names = [p.name for _, p in cfg.team.iter_parts()]
+    statuses = compute_status(week_dir, part_names)
+    click.echo(format_status_report(statuses, week=week, team_name=cfg.team.name))
 
 
 @cli.group("schedule")
@@ -421,75 +276,58 @@ def schedule_group() -> None:
 
 
 @schedule_group.command("install")
-@click.argument("dept", type=str)
+@click.argument("team", type=str)
 @click.option("--config", "config_path", type=click.Path(path_type=Path), default=None)
-def schedule_install_cmd(dept, config_path) -> None:
+def schedule_install_cmd(team, config_path) -> None:
     cfg = _load_cfg(config_path)
     project_root = Path.cwd()
     # NOTE: wreport path resolution duplicated in skills/weekly/scripts/schedule_install.py
-    # (used at init time). Different contexts (runtime CLI vs skill script); extracting
-    # would couple skill bundle + project template layers. Duplication is 5 lines, cost
-    # of extraction outweighs benefit.
+    # (used at init time). Different contexts (runtime CLI vs skill script).
     if sys.platform == "win32":
         wreport = project_root / "venv" / "Scripts" / "wreport.exe"
     else:
         wreport = project_root / "venv" / "bin" / "wreport"
 
-    if cfg.team is not None:
-        # Phase 2: 3 tasks — prepare (Mon), assign (every hour), compile (Fri)
-        name = cfg.team.name
-        install_task(
-            name=f"weekly-{name}-prepare",
-            cron=cfg.schedule.prepare_cron,
-            command=f'"{wreport}" prepare {name}',
-            working_dir=str(project_root),
-        )
-        install_task(
-            name=f"weekly-{name}-assign",
-            cron=cfg.schedule.assign_cron,
-            command=f'"{wreport}" assign {name}',
-            working_dir=str(project_root),
-        )
-        install_task(
-            name=f"weekly-{name}-compile",
-            cron=cfg.schedule.compile_cron,
-            command=f'"{wreport}" compile {name}',
-            working_dir=str(project_root),
-        )
-        click.echo(f"Installed weekly-{name}-prepare, -assign, and -compile (Phase 2).")
-        return
-
+    name = cfg.team.name
     install_task(
-        name=f"weekly-{cfg.department.name}-assign",
+        name=f"weekly-{name}-prepare",
+        cron=cfg.schedule.prepare_cron,
+        command=f'"{wreport}" prepare {name}',
+        working_dir=str(project_root),
+    )
+    install_task(
+        name=f"weekly-{name}-assign",
         cron=cfg.schedule.assign_cron,
-        command=f'"{wreport}" assign {cfg.department.name}',
+        command=f'"{wreport}" assign {name}',
         working_dir=str(project_root),
     )
     install_task(
-        name=f"weekly-{cfg.department.name}-compile",
+        name=f"weekly-{name}-compile",
         cron=cfg.schedule.compile_cron,
-        command=f'"{wreport}" compile {cfg.department.name}',
+        command=f'"{wreport}" compile {name}',
         working_dir=str(project_root),
     )
-    click.echo(f"Installed weekly-{cfg.department.name}-assign and -compile.")
+    click.echo(f"Installed weekly-{name}-prepare, -assign, and -compile.")
 
 
 @schedule_group.command("uninstall")
-@click.argument("dept", type=str)
+@click.argument("team", type=str)
 @click.option("--config", "config_path", type=click.Path(path_type=Path), default=None)
-def schedule_uninstall_cmd(dept, config_path) -> None:
+def schedule_uninstall_cmd(team, config_path) -> None:
     cfg = _load_cfg(config_path)
-    uninstall_task(f"weekly-{cfg.department.name}-assign")
-    uninstall_task(f"weekly-{cfg.department.name}-compile")
+    name = cfg.team.name
+    uninstall_task(f"weekly-{name}-prepare")
+    uninstall_task(f"weekly-{name}-assign")
+    uninstall_task(f"weekly-{name}-compile")
     click.echo("Uninstalled.")
 
 
 @schedule_group.command("status")
-@click.argument("dept", type=str)
+@click.argument("team", type=str)
 @click.option("--config", "config_path", type=click.Path(path_type=Path), default=None)
-def schedule_status_cmd(dept, config_path) -> None:
+def schedule_status_cmd(team, config_path) -> None:
     cfg = _load_cfg(config_path)
-    tasks = list_tasks(prefix=f"weekly-{cfg.department.name}-")
+    tasks = list_tasks(prefix=f"weekly-{cfg.team.name}-")
     if not tasks:
         click.echo("No /weekly tasks registered.")
     else:

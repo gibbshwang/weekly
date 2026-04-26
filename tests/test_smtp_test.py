@@ -9,7 +9,7 @@ def test_send_test_mail_calls_smtp():
         send_test_mail(
             host="smtp.gmail.com", port=587, use_tls=True,
             user="op@example.com", password="pwd",
-            to="lead@example.com", dept_name="기획팀",
+            to="lead@example.com", team_name="기획팀",
         )
     smtp_cls.assert_called_with("smtp.gmail.com", 587)
     smtp_inst.starttls.assert_called_once()
@@ -27,7 +27,7 @@ def test_send_test_mail_no_tls():
         send_test_mail(
             host="local.smtp", port=25, use_tls=False,
             user="op", password="pwd",
-            to="lead@example.com", dept_name="x",
+            to="lead@example.com", team_name="x",
         )
     smtp_inst.starttls.assert_not_called()
 
@@ -39,7 +39,7 @@ def test_send_test_mail_includes_helpful_body():
         send_test_mail(
             host="smtp.example.com", port=587, use_tls=True,
             user="op@e.com", password="x",
-            to="lead@example.com", dept_name="기획팀",
+            to="lead@example.com", team_name="기획팀",
         )
     msg = smtp_inst.send_message.call_args[0][0]
     body = msg.get_content()

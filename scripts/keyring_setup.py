@@ -5,14 +5,14 @@ which use their own auth. No AI API key is stored.
 """
 import keyring
 
-from scripts.scope import ScopeAnswers
+from scripts.scope import TeamScopeAnswers
 
 
-def save_secrets(answers: ScopeAnswers) -> None:
-    """Store SMTP password in OS keyring under `weekly-<dept>`/smtp_password.
+def save_secrets(answers: TeamScopeAnswers) -> None:
+    """Store SMTP password in OS keyring under `weekly-<team>`/smtp_password.
 
     AI api keys are intentionally NOT stored — Codex CLI and Gemini CLI handle
     their own credentials.
     """
-    service = f"weekly-{answers.dept_name}"
+    service = f"weekly-{answers.team_name}"
     keyring.set_password(service, "smtp_password", answers.smtp_password)
