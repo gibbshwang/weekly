@@ -209,13 +209,14 @@ def _build_user_prompt(team_name: str, week: str, parts_data: Dict[str, Dict[str
 
 
 def _normalize_compile_output(data: Any) -> Dict[str, Any]:
-    """Backfill missing/wrong-typed top-level keys with empty defaults.
+    """Backfill missing/wrong-typed keys with empty defaults at every depth
+    that the dashboard renderer iterates over.
 
-    The LLM is prompted to return a strict v2 schema, but real models
-    occasionally drop keys or return slightly off types (string vs list,
-    list vs dict). Downstream dashboard render assumes all keys exist,
-    so normalize at the boundary rather than spreading `.get(..., default)`
-    across every template line.
+    Top-level keys are normalized first; then each 항목 element under
+    지난주/이번주 is normalized so an LLM that returns a string where a
+    list was specified (e.g. `이번주_처리결과: "draft"` instead of
+    `["draft"]`) cannot crash downstream `{% for x in row.이번주_처리결과 %}`
+    iteration. Same for 그룹장_확인필요 entries.
     """
     if not isinstance(data, dict):
         data = {}
@@ -229,6 +230,54 @@ def _normalize_compile_output(data: Any) -> Dict[str, Any]:
     def _dict(v) -> dict:
         return v if isinstance(v, dict) else {}
 
+    def _normalize_item(raw) -> dict:
+        # Coerce non-dict elements to the full empty-shape dict — keeps
+        # the dashboard's `{% for it in items %}{{ it.상태 }}` template
+        # safe regardless of whether the LLM returned an item-shaped dict
+        # or a stray string / null.
+        if not isinstance(raw, dict):
+            raw = {}
+        return {
+            "그룹": _str(raw.get("그룹")),
+            "파트": _str(raw.get("파트")),
+            "업무ID": _str(raw.get("업무ID")),
+            "업무": _str(raw.get("업무")),
+            "상태": _str(raw.get("상태")),
+            "이번주_처리결과": _list(raw.get("이번주_처리결과")),
+            "이슈": _list(raw.get("이슈")),
+            "리스크_지원요청": _list(raw.get("리스크_지원요청")),
+            "다음액션": _list(raw.get("다음액션")),
+            "마감": _str(raw.get("마감")),
+            "우선순위": _str(raw.get("우선순위")),
+        }
+
+    def _normalize_check_item(raw) -> dict:
+        if not isinstance(raw, dict):
+            raw = {}
+        return {
+            "그룹": _str(raw.get("그룹")),
+            "파트": _str(raw.get("파트")),
+            "업무ID": _str(raw.get("업무ID")),
+            "내용": _str(raw.get("내용")),
+            "희망기한": _str(raw.get("희망기한")),
+        }
+
+    def _normalize_group_summary(value) -> dict:
+        out = {}
+        if not isinstance(value, dict):
+            return out
+        for group_name, sub in value.items():
+            if not isinstance(group_name, str):
+                continue
+            if not isinstance(sub, dict):
+                out[group_name] = {"상태": "", "요약": ""}
+                continue
+            out[group_name] = {
+                "상태": _str(sub.get("상태")),
+                "요약": _str(sub.get("요약")),
+            }
+        return out
+
     section_지난주 = _dict(data.get("지난주"))
     section_이번주 = _dict(data.get("이번주"))
 
@@ -236,16 +285,18 @@ def _normalize_compile_output(data: Any) -> Dict[str, Any]:
         "팀_종합_요약": _str(data.get("팀_종합_요약")),
         "지난주": {
             "요약": _str(section_지난주.get("요약")),
-            "항목": _list(section_지난주.get("항목")),
+            "항목": [_normalize_item(it) for it in _list(section_지난주.get("항목"))],
         },
         "이번주": {
             "요약": _str(section_이번주.get("요약")),
-            "항목": _list(section_이번주.get("항목")),
+            "항목": [_normalize_item(it) for it in _list(section_이번주.get("항목"))],
         },
-        "그룹별_요약": _dict(data.get("그룹별_요약")),
-        "그룹장_확인필요": _list(data.get("그룹장_확인필요")),
-        "미작성_파트": _list(data.get("미작성_파트")),
-        "주의사항": _list(data.get("주의사항")),
+        "그룹별_요약": _normalize_group_summary(data.get("그룹별_요약")),
+        "그룹장_확인필요": [
+            _normalize_check_item(it) for it in _list(data.get("그룹장_확인필요"))
+        ],
+        "미작성_파트": [_str(p) for p in _list(data.get("미작성_파트"))],
+        "주의사항": [_str(n) for n in _list(data.get("주의사항"))],
     }
 
 
