@@ -3,12 +3,11 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 from scripts.lib.template_render import render_string
 
-# Get the project root (parent of skills/weekly)
-PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
 def _load_mailer(tmp_path: Path):
-    template_path = PROJECT_ROOT / "skills/weekly/templates/src/mailer.py.tmpl"
+    template_path = PROJECT_ROOT / "templates/src/mailer.py.tmpl"
     text = render_string(
         template_path.read_text(encoding="utf-8"), {}
     )

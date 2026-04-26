@@ -2,12 +2,11 @@ import importlib.util
 from pathlib import Path
 from scripts.lib.template_render import render_string
 
-# Get the project root (parent of skills/weekly)
-PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
 def _load_dashboard(tmp_path: Path):
-    template_path = PROJECT_ROOT / "skills/weekly/templates/src/dashboard.py.tmpl"
+    template_path = PROJECT_ROOT / "templates/src/dashboard.py.tmpl"
     text = render_string(
         template_path.read_text(encoding="utf-8"), {}
     )
@@ -34,7 +33,7 @@ def test_render_dashboard_includes_summary(tmp_path: Path):
         result=result,
         dept_name="기획팀",
         week="2026-W18",
-        template_path=PROJECT_ROOT / "skills/weekly/templates/template_dashboard.html.j2",
+        template_path=PROJECT_ROOT / "templates/template_dashboard.html.j2",
     )
     assert "기획팀 주간보고 — 2026-W18" in html
     assert "이번 주 핵심 성과 요약입니다." in html
@@ -53,7 +52,7 @@ def test_render_marks_missing_parts(tmp_path: Path):
     }
     html = dashboard.render_dashboard(
         result=result, dept_name="기획팀", week="2026-W18",
-        template_path=PROJECT_ROOT / "skills/weekly/templates/template_dashboard.html.j2",
+        template_path=PROJECT_ROOT / "templates/template_dashboard.html.j2",
     )
     assert "사업개발" in html
     assert "미작성 파트" in html
@@ -70,7 +69,7 @@ def test_render_includes_warnings(tmp_path: Path):
     }
     html = dashboard.render_dashboard(
         result=result, dept_name="기획팀", week="2026-W18",
-        template_path=PROJECT_ROOT / "skills/weekly/templates/template_dashboard.html.j2",
+        template_path=PROJECT_ROOT / "templates/template_dashboard.html.j2",
     )
     assert "민감정보 가능성 발견" in html
     assert "주의사항" in html
@@ -85,7 +84,7 @@ def test_dashboard_has_pretendard_font_stack(tmp_path: Path):
     }
     html = dashboard.render_dashboard(
         result=result, dept_name="기획팀", week="2026-W18",
-        template_path=PROJECT_ROOT / "skills/weekly/templates/template_dashboard.html.j2",
+        template_path=PROJECT_ROOT / "templates/template_dashboard.html.j2",
     )
     # System font stack with Pretendard primary + Korean fallback
     assert "Pretendard" in html
@@ -101,7 +100,7 @@ def test_dashboard_uses_design_palette(tmp_path: Path):
     }
     html = dashboard.render_dashboard(
         result=result, dept_name="기획팀", week="2026-W18",
-        template_path=PROJECT_ROOT / "skills/weekly/templates/template_dashboard.html.j2",
+        template_path=PROJECT_ROOT / "templates/template_dashboard.html.j2",
     )
     assert "#F5F3F0" in html  # warm gray
     assert "#1B6B5A" in html  # deep teal
@@ -120,7 +119,7 @@ def test_dashboard_has_print_styles(tmp_path: Path):
     }
     html = dashboard.render_dashboard(
         result=result, dept_name="기획팀", week="2026-W18",
-        template_path=PROJECT_ROOT / "skills/weekly/templates/template_dashboard.html.j2",
+        template_path=PROJECT_ROOT / "templates/template_dashboard.html.j2",
     )
     assert "@media print" in html
 
@@ -136,7 +135,7 @@ def test_dashboard_uses_semantic_html(tmp_path: Path):
     }
     html = dashboard.render_dashboard(
         result=result, dept_name="기획팀", week="2026-W18",
-        template_path=PROJECT_ROOT / "skills/weekly/templates/template_dashboard.html.j2",
+        template_path=PROJECT_ROOT / "templates/template_dashboard.html.j2",
     )
     assert "<header" in html or "<main" in html
     # Progress bar should have ARIA label or role
@@ -152,7 +151,7 @@ def test_dashboard_no_external_resources(tmp_path: Path):
     }
     html = dashboard.render_dashboard(
         result=result, dept_name="기획팀", week="2026-W18",
-        template_path=PROJECT_ROOT / "skills/weekly/templates/template_dashboard.html.j2",
+        template_path=PROJECT_ROOT / "templates/template_dashboard.html.j2",
     )
     # No CDN imports
     import re

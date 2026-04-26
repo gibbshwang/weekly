@@ -2,8 +2,8 @@
 from pathlib import Path
 from scripts.lib.template_render import render_string
 
-PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
-CLI_TMPL = PROJECT_ROOT / "skills/weekly/templates/src/cli.py.tmpl"
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+CLI_TMPL = PROJECT_ROOT / "templates/src/cli.py.tmpl"
 
 
 def test_cli_template_renders_and_compiles():

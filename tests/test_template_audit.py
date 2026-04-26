@@ -4,12 +4,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from scripts.lib.template_render import render_string
 
-# Get the project root (parent of skills/weekly), matching sibling test convention
-PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
 def _load_audit(tmp_path: Path):
-    template_path = PROJECT_ROOT / "skills/weekly/templates/src/audit.py.tmpl"
+    template_path = PROJECT_ROOT / "templates/src/audit.py.tmpl"
     text = render_string(
         template_path.read_text(encoding="utf-8"), {}
     )

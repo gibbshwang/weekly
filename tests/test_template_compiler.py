@@ -4,12 +4,11 @@ from pathlib import Path
 from unittest.mock import MagicMock
 from scripts.lib.template_render import render_string
 
-# Get the project root (parent of skills/weekly)
-PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
 def _load_compiler(tmp_path: Path):
-    template_path = PROJECT_ROOT / "skills/weekly/templates/src/compiler.py.tmpl"
+    template_path = PROJECT_ROOT / "templates/src/compiler.py.tmpl"
     text = render_string(
         template_path.read_text(encoding="utf-8"), {}
     )
@@ -23,7 +22,7 @@ def _load_compiler(tmp_path: Path):
 
 def test_collect_parts_reads_fixture_md(tmp_path: Path):
     compiler = _load_compiler(tmp_path)
-    md_dir = PROJECT_ROOT / "skills/weekly/fixtures"
+    md_dir = PROJECT_ROOT / "fixtures"
     contents = compiler.collect_parts(md_dir, ["전략기획", "사업개발"], pattern="sample_part_{part}.md")
     assert len(contents) == 2
     assert contents[0][0] == "전략기획"
@@ -57,7 +56,7 @@ def test_run_compile_calls_llm_with_rendered_prompt(tmp_path: Path):
         parts=["전략기획"],
         week="2026-W17",
         parts_data=parts_data,
-        prompt_template_path=PROJECT_ROOT / "skills/weekly/templates/src/prompts/compile_system.txt.tmpl",
+        prompt_template_path=PROJECT_ROOT / "templates/src/prompts/compile_system.txt.tmpl",
     )
     assert result["부서_종합_요약"] == "테스트 요약"
     assert result["진척률"]["전략기획"] == 80
@@ -81,6 +80,6 @@ def test_run_compile_handles_codex_json_with_text_wrapping(tmp_path: Path):
         parts=[],
         week="2026-W17",
         parts_data=[],
-        prompt_template_path=PROJECT_ROOT / "skills/weekly/templates/src/prompts/compile_system.txt.tmpl",
+        prompt_template_path=PROJECT_ROOT / "templates/src/prompts/compile_system.txt.tmpl",
     )
     assert result["부서_종합_요약"] == "x"

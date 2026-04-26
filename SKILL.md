@@ -1,8 +1,6 @@
 ---
 name: weekly
 description: Weekly Report Automation Harness — end-to-end automation for departmental weekly status reports (group lead instructions → part lead .md updates → AI compile → HTML dashboard → email). Use when the user wants a self-healing, scheduled Python project that runs on a corporate shared folder with SMTP notification. Generates an independent project folder with Click CLI + OS keyring auth + Codex CLI subprocess for AI calls (sanctioned channel only) and Gemini CLI subprocess fallback.
-author: gibbs hwang
-version: 0.1.0
 ---
 
 # /weekly — Weekly Report Automation Harness

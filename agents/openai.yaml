@@ -1,0 +1,4 @@
+interface:
+  display_name: "Weekly Reports"
+  short_description: "Automate departmental weekly report workflows"
+  default_prompt: "Use $weekly to set up a departmental weekly report automation project."
