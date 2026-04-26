@@ -1,7 +1,9 @@
 """Tests for the Phase 2 xlsx generators.
 
-generate_directives_xlsx — 7-column 지시사항.xlsx with 담당그룹 + 담당파트 dropdowns
-generate_part_xlsx — 4-sheet per-part workbook (지난주 / 이번주 / 지난주_완료 / _refs)
+generate_directives_xlsx — 6-column 지시사항.xlsx with 담당파트 dropdown
+  (담당그룹은 시스템이 담당파트로부터 역산하므로 지시자 입력 제외).
+generate_part_xlsx — 4-sheet per-part workbook (지난주 / 이번주 / 지난주_완료 / _refs).
+  지난주_완료 is hidden — archive-only.
 """
 from dataclasses import dataclass
 from pathlib import Path
@@ -45,7 +47,7 @@ def _stub_team():
     )
 
 
-# --- generate_directives_xlsx (7-col) ---
+# --- generate_directives_xlsx (6-col) ---
 
 
 def test_directives_xlsx_has_six_column_header(tmp_path: Path):

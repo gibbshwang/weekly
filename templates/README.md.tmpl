@@ -42,9 +42,9 @@ wreport schedule install {{ team_name }}
 - `config.yaml` — 팀 메타 (수동 편집 가능; team / groups[] / parts[] 구조)
 - `venv/` — 가상환경
 - 데이터 위치: `{{ storage_root }}/{{ team_name }}/`
-  - `_지시사항.xlsx` — 팀장/그룹장이 평일 수시로 편집 (담당그룹 + 담당파트 dropdown)
-  - `YYYY-Www/<파트>.xlsx` — 파트장이 작성 (지난주 / 이번주 / 지난주_완료 시트)
-  - `YYYY-Www/_dashboard.html` — compile 결과 (팀장에게 메일 발송 + 그룹장/파트장 cc)
+  - `_지시사항.xlsx` — 팀장이 평일 수시로 편집 (6열: 일자/지시내용/담당파트/우선순위/마감/비고; 담당파트만 dropdown, 그룹은 시스템이 역산)
+  - `YYYY-Www/<파트>.xlsx` — 파트장 작성 영역 (지난주 / 이번주 두 시트). 완료된 업무는 `지난주_완료` 보관시트로 자동 이동 (hidden, 시스템 관리)
+  - `YYYY-Www/_dashboard.html` — compile 결과 (to=팀장, cc=그룹장+파트장)
 
 ## AI provider
 

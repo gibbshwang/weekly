@@ -1,11 +1,14 @@
 """Stage 4: xlsx_template — generate Phase 2 workbooks.
 
 Two generators:
-- generate_directives_xlsx(team) — 7-column `_지시사항.xlsx` with 담당그룹
-  + 담당파트 dropdowns sourced from a hidden _refs sheet
+- generate_directives_xlsx(team) — 6-column `_지시사항.xlsx` (일자/지시내용/
+  담당파트/우선순위/마감/비고). 담당그룹은 시스템이 담당파트 → team
+  membership으로 역산하므로 지시자 입력에서 제외. 담당파트 dropdown은
+  hidden _refs 시트가 소스.
 - generate_part_xlsx(team_name, group_name, part_name, week) — per-part
   workbook with 지난주 / 이번주 / 지난주_완료 sheets, 11 columns each, plus
-  a hidden _refs sheet for state / source / priority dropdowns
+  a hidden _refs sheet for state / source / priority dropdowns. 지난주_완료
+  is hidden — completed-row archive, not a lead-editable surface.
 
 The pre-Phase-2 single-part-list generator was removed in the Wave E cleanup.
 """
