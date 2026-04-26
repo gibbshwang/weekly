@@ -7,13 +7,30 @@ NOTE: _strip_code_fence logic is intentionally duplicated from compiler.py.tmpl
 (7 lines, zero external state). DRY's cost-benefit fails for this small,
 clearly bounded helper — extracting a shared module would couple two otherwise
 independent templates. Defer consolidation until a third consumer appears.
+
+Phase 2 (Wave B) adds:
+- generate_task_id(week, seq)             — W18-003 ID format
+- next_seq_for_week(part_xlsx_dir, team, week) — finds next free seq
+- resolve_target_part_v2(row, team, ...)  — group-aware part resolution
+- append_to_part_xlsx(...)                — write row to part xlsx 이번주 sheet
+- run_assign_v2(rows, team, week, ...)    — full v2 pipeline
+
+The legacy md-based path stays for the transition; CLI migrates in Wave E.
 """
 import hashlib
 import json
+import re
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 from jinja2 import Template
+
+try:
+    from openpyxl import load_workbook
+    from weekly_runtime.xlsx_template import PART_SHEET_HEADERS
+except ImportError:  # pragma: no cover — exercised by harness tests
+    from openpyxl import load_workbook
+    from scripts.xlsx_template import PART_SHEET_HEADERS
 
 
 def _row_hash(row: Dict[str, Any]) -> str:
@@ -144,6 +161,178 @@ def run_assign(rows: List[Dict[str, Any]], parts: List[str],
         append_assignment(md_dir, part, row, timestamp)
         affected.setdefault(part, []).append(idx)
         entries.append((idx, part, method))
+
+    update_state(state_path, rows, entries)
+    return affected
+
+
+# --- Phase 2 (Wave B): xlsx-based assign with 업무ID ---
+
+
+_TASK_ID_RE = re.compile(r"^W(\d{1,2})-(\d{3})$")
+
+
+def generate_task_id(week: str, seq: int) -> str:
+    """`W18-003`-style task ID from an ISO week string and a sequence number.
+
+    Accepts `2026-W18` or `W18`; uses just the week portion so IDs stay short
+    enough to fit a column without wrapping.
+    """
+    week_short = week.rsplit("-", 1)[-1] if "-W" in week else f"W{int(week):02d}"
+    if not week_short.startswith("W"):
+        week_short = f"W{week_short}"
+    return f"{week_short}-{seq:03d}"
+
+
+def _seq_from_task_id(task_id: str, week_short: str) -> int | None:
+    """Extract seq from `W18-NNN`, returning None if it isn't this week's prefix."""
+    if not isinstance(task_id, str):
+        return None
+    m = _TASK_ID_RE.fullmatch(task_id.strip())
+    if not m:
+        return None
+    if f"W{m.group(1).zfill(2)}" != week_short:
+        return None
+    return int(m.group(2))
+
+
+def next_seq_for_week(part_xlsx_dir: Path, team, week: str) -> int:
+    """Scan every part workbook and return max existing W{week}-NNN seq + 1.
+
+    Looks at the 이번주 + 지난주 sheets (이월 rows in 지난주 keep their original
+    week prefix, so they are correctly ignored by the prefix check).
+    """
+    week_short = week.rsplit("-", 1)[-1] if "-W" in week else week
+    if not week_short.startswith("W"):
+        week_short = f"W{int(week_short):02d}"
+    part_xlsx_dir = Path(part_xlsx_dir)
+    max_seq = 0
+    for _, part in team.iter_parts():
+        path = part_xlsx_dir / f"{part.name}.xlsx"
+        if not path.exists():
+            continue
+        wb = load_workbook(path)
+        for sheet_name in ("이번주", "지난주"):
+            if sheet_name not in wb.sheetnames:
+                continue
+            for row in wb[sheet_name].iter_rows(min_row=2, values_only=True):
+                if not row:
+                    continue
+                seq = _seq_from_task_id(row[0], week_short)
+                if seq is not None and seq > max_seq:
+                    max_seq = seq
+    return max_seq + 1
+
+
+def _find_part_in_team(team, part_name: str):
+    """Return (group, part) for the named part, or (None, None)."""
+    for g, p in team.iter_parts():
+        if p.name == part_name:
+            return g, p
+    return None, None
+
+
+def resolve_target_part_v2(row: Dict[str, Any], team, llm, prompt_template_path: Path):
+    """Group-aware part resolution.
+
+    Returns (group, part, method) where method ∈ {"column", "ai_inferred"}.
+
+    1. If 담당파트 is filled and matches a part in `team` → use it
+       (grouping is derived from team membership, even if 담당그룹 was wrong).
+    2. Else hand off to the LLM with the flat parts list. The LLM picks a
+       part name; we look it up in the team to recover its group.
+    3. If the LLM picks an invalid part, fall back to the first part of the
+       first group.
+    """
+    candidate = (row.get("담당파트") or "").strip()
+    g, p = _find_part_in_team(team, candidate)
+    if p is not None:
+        return g, p, "column"
+
+    parts_flat = [p.name for _, p in team.iter_parts()]
+    sys_prompt = Template(Path(prompt_template_path).read_text(encoding="utf-8")).render(
+        dept_name=team.name, parts=parts_flat,
+    )
+    user_payload = {k: row.get(k, "") for k in
+                    ["일자", "지시내용", "담당그룹", "우선순위", "마감", "비고"]}
+    raw = llm.call(sys_prompt, json.dumps(user_payload, ensure_ascii=False))
+    decision = json.loads(_strip_code_fence(raw))
+    inferred = decision.get("추정_담당파트", "")
+    g, p = _find_part_in_team(team, inferred)
+    if p is None:
+        g, p = next(iter(team.iter_parts()))   # fallback: first part of first group
+    return g, p, "ai_inferred"
+
+
+def append_to_part_xlsx(
+    part_xlsx_path: Path,
+    task_id: str,
+    row: Dict[str, Any],
+    source: str,
+) -> None:
+    """Append one row to the 이번주 sheet of an existing part workbook.
+
+    `source` is written into the 출처 column — typically "지시사항" when called
+    from the assigner, or "이월" when called from prepare's carry-forward
+    (handled separately by prepare).
+    """
+    part_xlsx_path = Path(part_xlsx_path)
+    wb = load_workbook(part_xlsx_path)
+    ws = wb["이번주"]
+    payload = {
+        "업무ID": task_id,
+        "출처": source,
+        "업무_지시내용": row.get("지시내용", ""),
+        "상태": "",
+        "이번주_처리결과": "",
+        "이슈_장애": "",
+        "리스크_지원요청": "",
+        "다음액션_차주계획": "",
+        "마감": row.get("마감", ""),
+        "우선순위": row.get("우선순위", ""),
+        "비고": row.get("비고", ""),
+    }
+    ws.append([payload.get(h, "") for h in PART_SHEET_HEADERS])
+    wb.save(part_xlsx_path)
+
+
+def run_assign_v2(
+    rows: List[Dict[str, Any]],
+    team,
+    week: str,
+    state_path: Path,
+    part_xlsx_dir: Path,
+    llm,
+    prompt_template_path: Path,
+) -> Dict[str, List[str]]:
+    """Phase 2 assign tick.
+
+    Returns `{part_name: [task_id, ...]}` of parts touched this tick.
+    Carries forward state for unchanged rows so cron reruns are idempotent.
+    """
+    new_idx, mod_idx = diff_rows(rows, state_path)
+    if not (new_idx or mod_idx):
+        return {}
+
+    seq = next_seq_for_week(part_xlsx_dir, team, week)
+
+    affected: Dict[str, List[str]] = {}
+    skip = set(new_idx + mod_idx)
+    entries = list(_carry_forward_state(state_path, rows, skip))
+
+    for idx in sorted(new_idx + mod_idx):
+        row = rows[idx]
+        group, part, method = resolve_target_part_v2(
+            row, team=team, llm=llm, prompt_template_path=prompt_template_path,
+        )
+        task_id = generate_task_id(week, seq)
+        seq += 1
+        append_to_part_xlsx(
+            part_xlsx_path=Path(part_xlsx_dir) / f"{part.name}.xlsx",
+            task_id=task_id, row=row, source="지시사항",
+        )
+        affected.setdefault(part.name, []).append(task_id)
+        entries.append((idx, part.name, method))
 
     update_state(state_path, rows, entries)
     return affected

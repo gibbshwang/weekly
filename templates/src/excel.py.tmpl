@@ -11,6 +11,9 @@ from typing import Any, Dict, List
 from openpyxl import load_workbook
 
 EXPECTED_HEADERS = ["일자", "지시내용", "담당파트", "우선순위", "마감", "비고"]
+EXPECTED_HEADERS_V2 = [
+    "일자", "지시내용", "담당그룹", "담당파트", "우선순위", "마감", "비고",
+]
 
 
 def read_instructions(xlsx_path: Path) -> List[Dict[str, Any]]:
@@ -39,3 +42,32 @@ def row_hash(row: Dict[str, Any]) -> str:
     """Stable SHA256 hash of a row dict for change detection."""
     canonical = json.dumps(row, sort_keys=True, ensure_ascii=False)
     return "sha256:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def read_instructions_v2(xlsx_path: Path) -> List[Dict[str, Any]]:
+    """Phase 2 reader: 7-column header (담당그룹 between 지시내용 and 담당파트).
+
+    Mirrors read_instructions() but enforces EXPECTED_HEADERS_V2 so a stale
+    6-col xlsx is rejected at load time rather than silently dropping
+    columns. The 담당그룹 column is informational — assigner_v2 still uses
+    담당파트 for the deterministic match and falls back to LLM if blank.
+    """
+    wb = load_workbook(xlsx_path, read_only=True, data_only=True)
+    ws = wb.active
+    header_row = next(ws.iter_rows(min_row=1, max_row=1))
+    header = [c.value for c in header_row]
+    if [h for h in header if h] != EXPECTED_HEADERS_V2:
+        raise ValueError(
+            f"Unexpected headers: {header} (expected {EXPECTED_HEADERS_V2})"
+        )
+    rows: List[Dict[str, Any]] = []
+    for row in ws.iter_rows(min_row=2, values_only=True):
+        if all(v is None or v == "" for v in row):
+            continue
+        record = {
+            header[i]: ("" if v is None else str(v))
+            for i, v in enumerate(row[: len(header)])
+        }
+        rows.append(record)
+    wb.close()
+    return rows
