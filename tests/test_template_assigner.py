@@ -497,6 +497,63 @@ def test_run_assign_raises_clear_error_when_part_workbooks_missing(tmp_path: Pat
     assert "2026-W18" in msg, f"error must include the week: {msg}"
 
 
+def test_run_assign_state_in_team_root_prevents_cross_week_reassign(tmp_path: Path):
+    """Regression for the CRITICAL multi-week duplicate bug:
+
+    _지시사항.xlsx is at team root and is long-lived (operators don't clear it
+    between weeks). assign state is keyed by instruction_key, but if state
+    is stored *inside* the week_dir, every new week starts with empty state
+    and re-assigns every row that's still in 지시사항.xlsx.
+
+    Combined with prepare's carry-forward (prior week's incomplete rows go
+    into 지난주 sheet), this produces:
+      - 지난주 sheet: 이월 row from prepare
+      - 이번주 sheet: SAME instruction re-assigned by assign
+
+    Putting state at team root (shared across weeks) prevents this.
+    """
+    a = _load_assigner(tmp_path)
+    fake_llm = MagicMock()
+    team = _team()
+    team_root = tmp_path / "기획팀"
+    team_root.mkdir(parents=True)
+
+    # Single team-root state file (the fix)
+    state_path = team_root / "_assignments_state.json"
+
+    # Week 17 setup + assign
+    week17_dir = team_root / "2026-W17"
+    _create_week_workbooks(week17_dir, team)
+    rows = [
+        {"일자": "2026-04-22", "지시내용": "long-running task",
+         "담당파트": "전략기획", "우선순위": "높음", "마감": "2026-04-30", "비고": ""},
+    ]
+    affected_w17 = a.run_assign(
+        rows=rows, team=team, week="2026-W17",
+        state_path=state_path, part_xlsx_dir=week17_dir,
+        llm=fake_llm, prompt_template_path=PROMPT_PATH,
+    )
+    assert "전략기획" in affected_w17
+
+    # Now week 18 — fresh week_dir, but the SAME state_path at team root.
+    # Operator hasn't removed the row from 지시사항.xlsx yet.
+    week18_dir = team_root / "2026-W18"
+    _create_week_workbooks(week18_dir, team)
+    affected_w18 = a.run_assign(
+        rows=rows, team=team, week="2026-W18",
+        state_path=state_path, part_xlsx_dir=week18_dir,
+        llm=fake_llm, prompt_template_path=PROMPT_PATH,
+    )
+    # The fingerprint is in shared state → no re-assignment
+    assert affected_w18 == {}, (
+        f"team-root state_path must prevent cross-week re-assign; got {affected_w18!r}"
+    )
+    # Week 18 workbook has NO duplicate row in 이번주
+    rows_w18 = list(load_workbook(week18_dir / "전략기획.xlsx")["이번주"]
+                    .iter_rows(min_row=2, values_only=True))
+    assert rows_w18 == [], f"이번주 should be empty for w18, got {rows_w18}"
+
+
 def test_run_assign_idempotent_on_second_call(tmp_path: Path):
     a = _load_assigner(tmp_path)
     fake_llm = MagicMock()
