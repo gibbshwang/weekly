@@ -85,3 +85,40 @@ def test_register_cron_tasks_uses_platform_appropriate_wreport(tmp_path, monkeyp
         assert "venv" in c["command"]
         assert "wreport" in c["command"]
         assert ".exe" in c["command"]
+
+
+# --- dept_name validation amplifier (FIX-03 amplifier) ---
+
+import pytest
+
+
+@pytest.mark.parametrize("bad_dept", [
+    'foo" & calc.exe & echo "',
+    "../../etc",
+    "name with space",
+    "foo\nbar",
+    "foo;rm -rf /",
+])
+def test_register_cron_rejects_dangerous_dept_name(tmp_path, bad_dept):
+    """schedule_install must reject hostile dept_name before letting it flow
+    into the cron command line. The downstream scheduler validates too, but
+    catching it here gives a clearer error and prevents partial state."""
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    _setup_fake_runtime(project_root)
+
+    answers = _answers(tmp_path)
+    # bypass ScopeAnswers' own validation (if any) by replacing the field
+    object.__setattr__(answers, "dept_name", bad_dept)
+
+    with pytest.raises(ValueError):
+        register_cron_tasks(
+            project_root=project_root, answers=answers,
+            assign_cron="0 * * * *", compile_cron="0 17 * * 5",
+        )
+
+    # No partial install — scheduler_calls.json should not exist or be empty
+    calls_file = project_root / "scheduler_calls.json"
+    if calls_file.exists():
+        calls = json.loads(calls_file.read_text(encoding="utf-8"))
+        assert calls == []

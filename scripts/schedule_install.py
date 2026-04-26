@@ -6,9 +6,28 @@ place) to install the two cron jobs for this department.
 Skipped during scaffold dry-run (install_pkg=False) since the project venv
 isn't built yet — Wave 8 dogfood handles the live install.
 """
+import re
 import sys
 from pathlib import Path
 from typing import Any
+
+# dept_name flows directly into the cron command string and the schtasks /TR
+# value below. Hostile values (`foo" & calc.exe`, `../etc`, embedded newlines)
+# would land in those shell-bearing surfaces. The downstream scheduler also
+# validates, but catching it here gives a clearer error and prevents the
+# first install_task call from succeeding while the second fails with a
+# confusing message.
+_DEPT_SLUG_RE = re.compile(r"^[가-힣A-Za-z0-9_][가-힣A-Za-z0-9_-]{0,39}$")
+
+
+def _validate_dept_name(name: str) -> str:
+    if not isinstance(name, str) or not _DEPT_SLUG_RE.fullmatch(name):
+        raise ValueError(
+            f"dept_name must be 1-40 chars of Korean / A-Z / 0-9 / _ / - "
+            f"(no spaces, no path separators, no shell metacharacters). "
+            f"Got: {name!r}"
+        )
+    return name
 
 
 def register_cron_tasks(project_root: Path,
@@ -19,6 +38,8 @@ def register_cron_tasks(project_root: Path,
 
     `answers` must expose `.dept_name` (matches ScopeAnswers contract).
     """
+    dept_name = _validate_dept_name(answers.dept_name)
+
     project_root = Path(project_root)
     sys.path.insert(0, str(project_root))
     try:
@@ -37,14 +58,14 @@ def register_cron_tasks(project_root: Path,
         wreport = project_root / "venv" / "bin" / "wreport"
 
     install_task(
-        name=f"weekly-{answers.dept_name}-assign",
+        name=f"weekly-{dept_name}-assign",
         cron=assign_cron,
-        command=f'"{wreport}" assign {answers.dept_name}',
+        command=f'"{wreport}" assign {dept_name}',
         working_dir=str(project_root),
     )
     install_task(
-        name=f"weekly-{answers.dept_name}-compile",
+        name=f"weekly-{dept_name}-compile",
         cron=compile_cron,
-        command=f'"{wreport}" compile {answers.dept_name}',
+        command=f'"{wreport}" compile {dept_name}',
         working_dir=str(project_root),
     )

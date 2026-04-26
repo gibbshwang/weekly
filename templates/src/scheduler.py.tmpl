@@ -7,8 +7,15 @@ Cron strings follow standard 5-field syntax. On Windows we translate to
 `/SC` flags via a small heuristic; complex cron strings fall back to
 `/SC HOURLY` (with a default behavior the operator can correct via
 schtasks GUI if needed).
+
+Security: every install_task input is validated before reaching the
+shell-bearing surfaces (`schtasks /TR`, `crontab -`). Hostile values
+in cron / working_dir / command / name would otherwise become RCE
+on the host that runs the schedule (potentially with elevated rights
+under Task Scheduler).
 """
 import re
+import shlex
 import subprocess
 import sys
 from typing import List
@@ -16,9 +23,68 @@ from typing import List
 
 _MARKER_PREFIX = "# weekly-managed:"
 
+# Each cron field allows digits, *, /, comma, hyphen. A semicolon, backtick,
+# or `$(...)` in the cron string would be reinterpreted by the shell at run
+# time — reject before they reach the crontab.
+_CRON_FIELD_RE = re.compile(r"^[\d*/,\-]+$")
+
+# Task names land directly in `/TN` (Windows) and as the marker label (Unix).
+# Restrict to the same slug shape used elsewhere in the project.
+_TASK_NAME_RE = re.compile(r"^[가-힣A-Za-z0-9_-]{1,80}$")
+
+# Characters forbidden inside working_dir / command. Newlines could synthesize
+# a new crontab line; NUL/CR truncate the line at the wrong point; quote
+# escapes the schtasks /TR string; `%` is special in crontab (it splits the
+# command from stdin) so it would re-interpret the rest of the command.
+_FORBIDDEN_CHARS = set("\"\r\n\x00%")
+
+
+def _validate_cron(cron: str) -> str:
+    if not isinstance(cron, str):
+        raise ValueError(f"cron must be a string, got {type(cron).__name__}")
+    # Reject CR/LF/NUL up front — they would smuggle a new crontab line
+    # past the 5-field split() check.
+    if any(c in cron for c in "\r\n\x00"):
+        raise ValueError(f"cron must not contain newline or NUL characters: {cron!r}")
+    parts = cron.strip().split()
+    if len(parts) != 5:
+        raise ValueError(
+            f"cron must have 5 whitespace-separated fields, got {len(parts)}: {cron!r}"
+        )
+    for p in parts:
+        if not _CRON_FIELD_RE.fullmatch(p):
+            raise ValueError(
+                f"cron field {p!r} contains characters outside [0-9 * / , -]; "
+                f"shell metacharacters and whitespace are not allowed inside a field"
+            )
+    return cron.strip()
+
+
+def _validate_task_name(name: str) -> str:
+    if not isinstance(name, str) or not _TASK_NAME_RE.fullmatch(name):
+        raise ValueError(
+            f"task name must be 1-80 chars of Korean / A-Z / 0-9 / _ / -, got: {name!r}"
+        )
+    return name
+
+
+def _validate_no_forbidden(value: str, label: str) -> str:
+    if not isinstance(value, str):
+        raise ValueError(f"{label} must be a string, got {type(value).__name__}")
+    bad = sorted({c for c in value if c in _FORBIDDEN_CHARS})
+    if bad:
+        raise ValueError(
+            f"{label} contains forbidden characters {bad!r}: {value!r}"
+        )
+    return value
+
 
 def install_task(name: str, cron: str, command: str, working_dir: str) -> None:
     """Register a scheduled task. Idempotent (uninstall then install)."""
+    name = _validate_task_name(name)
+    cron = _validate_cron(cron)
+    command = _validate_no_forbidden(command, "command")
+    working_dir = _validate_no_forbidden(working_dir, "working_dir")
     if sys.platform == "win32":
         _install_windows(name, cron, command, working_dir)
     else:
@@ -114,14 +180,24 @@ def _strip_managed_entry(crontab: str, name: str) -> List[str]:
 
 
 def _write_crontab(content: str) -> None:
-    subprocess.run(["crontab", "-"], input=content, text=True, capture_output=True)
+    res = subprocess.run(
+        ["crontab", "-"], input=content, text=True, capture_output=True
+    )
+    if res.returncode != 0:
+        raise RuntimeError(
+            f"crontab write failed (exit {res.returncode}): {res.stderr.strip()}"
+        )
 
 
 def _install_unix(name: str, cron: str, command: str, working_dir: str) -> None:
     existing = _read_crontab()
     cleaned = _strip_managed_entry(existing, name)
     cleaned.append(f"{_MARKER_PREFIX} {name}")
-    cleaned.append(f"{cron} cd {working_dir} && {command}")
+    # shlex.quote() wraps working_dir so cron's shell sees it as a single
+    # argument even if it contains spaces. command is left unquoted because
+    # it is intentionally a shell command (caller may chain with &&); the
+    # forbidden-char validator above already rejected the dangerous shapes.
+    cleaned.append(f"{cron} cd {shlex.quote(working_dir)} && {command}")
     _write_crontab("\n".join(cleaned) + "\n")
 
 
