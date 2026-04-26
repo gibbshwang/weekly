@@ -116,16 +116,17 @@ def test_instruction_key_normalizes_whitespace(tmp_path: Path):
 
 
 def test_diff_rows_returns_indices_of_unseen_keys(tmp_path: Path):
-    """Empty state → all rows are new."""
+    """Empty state → all rows are new, none updated."""
     a = _load_assigner(tmp_path)
     rows = [
         {"일자": "2026-04-22", "지시내용": "x", "담당파트": "전략기획",
          "우선순위": "높음", "마감": "2026-04-30", "비고": ""},
     ]
-    assert a.diff_rows(rows, _state_path(tmp_path)) == [0]
+    assert a.diff_rows(rows, _state_path(tmp_path)) == ([0], [])
 
 
 def test_diff_rows_skips_known_keys(tmp_path: Path):
+    """Same identity + same content_hash → unchanged (neither new nor updated)."""
     a = _load_assigner(tmp_path)
     sp = _state_path(tmp_path)
     rows = [
@@ -133,12 +134,11 @@ def test_diff_rows_skips_known_keys(tmp_path: Path):
          "우선순위": "높음", "마감": "2026-04-30", "비고": ""},
     ]
     a.update_state(sp, rows, [(0, "전략기획", "column")])
-    assert a.diff_rows(rows, sp) == []
+    assert a.diff_rows(rows, sp) == ([], [])
 
 
 def test_diff_rows_resilient_to_row_reorder(tmp_path: Path):
-    """Re-sorting the directives xlsx must NOT cause re-assignment.
-    This is the core bug Todo 2 is fixing."""
+    """Re-sorting the directives xlsx must NOT cause re-assignment."""
     a = _load_assigner(tmp_path)
     sp = _state_path(tmp_path)
     rows_v1 = [
@@ -148,9 +148,8 @@ def test_diff_rows_resilient_to_row_reorder(tmp_path: Path):
          "우선순위": "보통", "마감": "2026-05-02", "비고": ""},
     ]
     a.update_state(sp, rows_v1, [(0, "전략기획", "column"), (1, "사업개발", "column")])
-    # Sorted/swapped — same content, different positions
     rows_v2 = [rows_v1[1], rows_v1[0]]
-    assert a.diff_rows(rows_v2, sp) == []
+    assert a.diff_rows(rows_v2, sp) == ([], [])
 
 
 def test_diff_rows_resilient_to_row_insertion(tmp_path: Path):
@@ -167,15 +166,14 @@ def test_diff_rows_resilient_to_row_insertion(tmp_path: Path):
          "우선순위": "보통", "마감": "2026-04-29", "비고": ""},
         rows_v1[0],   # original — now at index 1
     ]
-    new = a.diff_rows(rows_v2, sp)
-    assert new == [0]   # only the new top row, NOT the shifted original
+    new_idx, updated_idx = a.diff_rows(rows_v2, sp)
+    assert new_idx == [0]   # only the new top row
+    assert updated_idx == []  # original not classified as updated
 
 
-def test_diff_rows_treats_content_edit_as_new(tmp_path: Path):
-    """If the operator edits 지시내용 in place, the new content has a new
-    instruction_key, so it's treated as a new instruction (and gets a new
-    task ID). The old key remains in state — out of scope for this PR
-    (operator workflow expects edits to be rare)."""
+def test_diff_rows_treats_지시내용_edit_as_new(tmp_path: Path):
+    """Editing 지시내용 (in identity_key) creates a new logical task — old
+    instruction_key remains in state, the new one is reported as new."""
     a = _load_assigner(tmp_path)
     sp = _state_path(tmp_path)
     rows_v1 = [
@@ -184,7 +182,58 @@ def test_diff_rows_treats_content_edit_as_new(tmp_path: Path):
     ]
     a.update_state(sp, rows_v1, [(0, "전략기획", "column")])
     rows_v2 = [{**rows_v1[0], "지시내용": "수정됨"}]
-    assert a.diff_rows(rows_v2, sp) == [0]
+    new_idx, updated_idx = a.diff_rows(rows_v2, sp)
+    assert new_idx == [0]
+    assert updated_idx == []
+
+
+def test_diff_rows_treats_마감_edit_as_update_not_new(tmp_path: Path):
+    """Editing only 마감 (mutable, NOT in identity_key) must NOT create a
+    new task — same identity, refreshed content_hash → updated_idx.
+    This is the core round 4 review fix: 'edit instead of duplicate'."""
+    a = _load_assigner(tmp_path)
+    sp = _state_path(tmp_path)
+    rows_v1 = [
+        {"일자": "2026-04-22", "지시내용": "x", "담당파트": "전략기획",
+         "우선순위": "높음", "마감": "2026-04-30", "비고": ""},
+    ]
+    a.update_state(sp, rows_v1, [(0, "전략기획", "column")])
+    rows_v2 = [{**rows_v1[0], "마감": "2026-05-07"}]   # 마감 edit only
+    new_idx, updated_idx = a.diff_rows(rows_v2, sp)
+    assert new_idx == []
+    assert updated_idx == [0]
+
+
+def test_diff_rows_treats_우선순위_edit_as_update_not_new(tmp_path: Path):
+    a = _load_assigner(tmp_path)
+    sp = _state_path(tmp_path)
+    rows_v1 = [
+        {"일자": "2026-04-22", "지시내용": "x", "담당파트": "전략기획",
+         "우선순위": "높음", "마감": "2026-04-30", "비고": ""},
+    ]
+    a.update_state(sp, rows_v1, [(0, "전략기획", "column")])
+    rows_v2 = [{**rows_v1[0], "우선순위": "보통"}]
+    new_idx, updated_idx = a.diff_rows(rows_v2, sp)
+    assert new_idx == []
+    assert updated_idx == [0]
+
+
+def test_diff_rows_비고_edit_classified_as_updated(tmp_path: Path):
+    """비고 is excluded from identity_key (so 비고 edit doesn't create a
+    new task) but included in content_hash so the part xlsx 비고 cell is
+    refreshed when the operator's note changes — instructor's commentary
+    flows through to parts without producing a new task ID."""
+    a = _load_assigner(tmp_path)
+    sp = _state_path(tmp_path)
+    rows_v1 = [
+        {"일자": "2026-04-22", "지시내용": "x", "담당파트": "전략기획",
+         "우선순위": "높음", "마감": "2026-04-30", "비고": ""},
+    ]
+    a.update_state(sp, rows_v1, [(0, "전략기획", "column")])
+    rows_v2 = [{**rows_v1[0], "비고": "임원 보고용"}]
+    new_idx, updated_idx = a.diff_rows(rows_v2, sp)
+    assert new_idx == []
+    assert updated_idx == [0]
 
 
 def test_state_uses_instructions_schema(tmp_path: Path):
@@ -629,6 +678,64 @@ def test_run_assign_recovers_stale_lockfile(tmp_path: Path):
     assert "전략기획" in affected
     # Lockfile released after run
     assert not lock_path.exists()
+
+
+def test_run_assign_updates_existing_row_when_마감_edited(tmp_path: Path):
+    """Round 4 #2: editing 마감 must update the existing part xlsx row in
+    place (no duplicate task). Lead-input columns (상태/처리결과) preserved."""
+    a = _load_assigner(tmp_path)
+    fake_llm = MagicMock()
+    team = _team()
+    team_root = tmp_path / "기획팀"
+    team_root.mkdir()
+    state_path = team_root / "_assignments_state.json"
+    week_dir = team_root / "2026-W18"
+    _create_week_workbooks(week_dir, team)
+
+    rows_v1 = [
+        {"일자": "2026-04-27", "지시내용": "전략 task",
+         "담당파트": "전략기획", "우선순위": "높음", "마감": "2026-04-30", "비고": ""},
+    ]
+    affected1 = a.run_assign(
+        rows=rows_v1, team=team, week="2026-W18",
+        state_path=state_path, part_xlsx_dir=week_dir,
+        llm=fake_llm, prompt_template_path=PROMPT_PATH,
+    )
+    assert "전략기획" in affected1
+    task_id = affected1["전략기획"][0]
+
+    # Part lead has filled in some user-input columns
+    wb = load_workbook(week_dir / "전략기획.xlsx")
+    ws = wb["이번주"]
+    상태_idx = PART_SHEET_HEADERS.index("상태")
+    처리결과_idx = PART_SHEET_HEADERS.index("이번주_처리결과")
+    for r in ws.iter_rows(min_row=2):
+        if r[0].value == task_id:
+            r[상태_idx].value = "진행중"
+            r[처리결과_idx].value = "draft 작성"
+            break
+    wb.save(week_dir / "전략기획.xlsx")
+
+    # Operator edits 마감 — same identity, different content_hash
+    rows_v2 = [{**rows_v1[0], "마감": "2026-05-07"}]
+    affected2 = a.run_assign(
+        rows=rows_v2, team=team, week="2026-W18",
+        state_path=state_path, part_xlsx_dir=week_dir,
+        llm=fake_llm, prompt_template_path=PROMPT_PATH,
+    )
+    # No NEW task — just an update
+    rows_in_workbook = list(load_workbook(week_dir / "전략기획.xlsx")["이번주"]
+                            .iter_rows(min_row=2, values_only=True))
+    assert len(rows_in_workbook) == 1, f"duplicate row! got: {rows_in_workbook}"
+    by_h = dict(zip(PART_SHEET_HEADERS, rows_in_workbook[0]))
+    assert by_h["업무ID"] == task_id
+    # Mutable cell refreshed
+    assert by_h["마감"] == "2026-05-07"
+    # Lead-input cells preserved
+    assert by_h["상태"] == "진행중"
+    assert by_h["이번주_처리결과"] == "draft 작성"
+    # affected reports the same task_id (touched by update path)
+    assert task_id in affected2.get("전략기획", [])
 
 
 def test_run_assign_idempotent_on_second_call(tmp_path: Path):
