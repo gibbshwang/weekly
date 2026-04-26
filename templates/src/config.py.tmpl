@@ -150,6 +150,10 @@ class StorageConfig(BaseModel):
 class ScheduleConfig(BaseModel):
     assign_cron: str
     compile_cron: str
+    # Phase 2: prepare runs Monday morning to set up the new week's part
+    # workbooks (and carry-forward incomplete items from the prior week).
+    # Default = every Monday at 06:00.
+    prepare_cron: str = "0 6 * * 1"
     timezone: str = "Asia/Seoul"
 
 
