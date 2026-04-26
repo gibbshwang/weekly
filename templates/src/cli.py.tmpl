@@ -191,11 +191,18 @@ def assign_cmd(team: str, config_path, week_str) -> None:
     if not prompt_path.exists():
         prompt_path = Path(__file__).parent / "prompts" / "assign_system.txt.tmpl"
 
-    affected = run_assign(
-        rows=rows, team=cfg.team, week=week,
-        state_path=state_path, part_xlsx_dir=week_dir,
-        llm=llm, prompt_template_path=prompt_path,
-    )
+    try:
+        affected = run_assign(
+            rows=rows, team=cfg.team, week=week,
+            state_path=state_path, part_xlsx_dir=week_dir,
+            llm=llm, prompt_template_path=prompt_path,
+        )
+    except FileNotFoundError as e:
+        # run_assign raises this when prepare-prerequisite is missing.
+        # Render as a clean CLI error rather than a Python traceback so
+        # cron logs / human readers see the actionable message.
+        click.echo(f"Error: {e}", err=True)
+        raise click.exceptions.Exit(code=1)
 
     log_event(
         audit_log, "assign",

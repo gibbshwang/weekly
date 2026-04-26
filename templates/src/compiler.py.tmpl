@@ -198,6 +198,47 @@ def _build_user_prompt(team_name: str, week: str, parts_data: Dict[str, Dict[str
     return "\n".join(lines)
 
 
+def _normalize_compile_output(data: Any) -> Dict[str, Any]:
+    """Backfill missing/wrong-typed top-level keys with empty defaults.
+
+    The LLM is prompted to return a strict v2 schema, but real models
+    occasionally drop keys or return slightly off types (string vs list,
+    list vs dict). Downstream dashboard render assumes all keys exist,
+    so normalize at the boundary rather than spreading `.get(..., default)`
+    across every template line.
+    """
+    if not isinstance(data, dict):
+        data = {}
+
+    def _str(v) -> str:
+        return v if isinstance(v, str) else ""
+
+    def _list(v) -> list:
+        return v if isinstance(v, list) else []
+
+    def _dict(v) -> dict:
+        return v if isinstance(v, dict) else {}
+
+    section_지난주 = _dict(data.get("지난주"))
+    section_이번주 = _dict(data.get("이번주"))
+
+    return {
+        "팀_종합_요약": _str(data.get("팀_종합_요약")),
+        "지난주": {
+            "요약": _str(section_지난주.get("요약")),
+            "항목": _list(section_지난주.get("항목")),
+        },
+        "이번주": {
+            "요약": _str(section_이번주.get("요약")),
+            "항목": _list(section_이번주.get("항목")),
+        },
+        "그룹별_요약": _dict(data.get("그룹별_요약")),
+        "그룹장_확인필요": _list(data.get("그룹장_확인필요")),
+        "미작성_파트": _list(data.get("미작성_파트")),
+        "주의사항": _list(data.get("주의사항")),
+    }
+
+
 def run_compile(
     llm,
     team,
@@ -205,7 +246,11 @@ def run_compile(
     parts_data: Dict[str, Dict[str, Any]],
     prompt_template_path: Path,
 ) -> Dict[str, Any]:
-    """Run a compile pass. Returns parsed JSON dict matching the v2 schema."""
+    """Run a compile pass. Returns parsed JSON dict matching the v2 schema.
+
+    The result is run through `_normalize_compile_output` so missing keys
+    or off-spec types from the LLM don't crash the dashboard renderer.
+    """
     groups_for_prompt = [
         {"name": g.name, "parts": [p.name for p in g.parts]}
         for g in team.groups
@@ -219,4 +264,5 @@ def run_compile(
     )
     user_prompt = _build_user_prompt(team.name, week, parts_data)
     raw = llm.call(sys_prompt, user_prompt)
-    return json.loads(_strip_code_fence(raw))
+    parsed = json.loads(_strip_code_fence(raw))
+    return _normalize_compile_output(parsed)
