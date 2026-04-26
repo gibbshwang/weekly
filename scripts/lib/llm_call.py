@@ -13,6 +13,11 @@ from typing import Literal
 
 ProviderName = Literal["codex", "gemini"]
 
+# Cap subprocess stdout to defend against runaway/hostile CLI output that would
+# otherwise grow unbounded in memory and downstream consumers.
+MAX_STDOUT = 1_048_576  # 1 MiB
+STAGE_TIMEOUT = 180  # seconds — same value as before, hoisted so callers can override
+
 
 class LLMClient:
     def __init__(self, provider: ProviderName = "codex", model: str | None = None) -> None:
@@ -65,14 +70,24 @@ class LLMClient:
 
     @staticmethod
     def _run_cli(cmd: list[str], label: str) -> str:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            timeout=180,
-            check=False,
-        )
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                timeout=STAGE_TIMEOUT,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as e:
+            raise RuntimeError(
+                f"{label} timed out after {STAGE_TIMEOUT}s"
+            ) from e
+        if len(result.stdout) > MAX_STDOUT:
+            raise RuntimeError(
+                f"{label} stdout exceeded {MAX_STDOUT} bytes "
+                f"(got {len(result.stdout)})"
+            )
         if result.returncode != 0:
             raise RuntimeError(
                 f"{label} failed (exit {result.returncode}): {result.stderr.strip()}"
