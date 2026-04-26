@@ -1,21 +1,16 @@
-"""Distribution engine — diffs new/modified xlsx rows, infers target parts, appends to <part>.md.
+"""Distribution engine — Phase 2 xlsx-based assign with deterministic 업무ID.
 
-Sidecar JSON state at `<dept>/<week>/_assignments_state.json` tracks processed
-row hashes so repeated cron ticks only handle new/modified rows.
+Reads new/modified rows from `_지시사항.xlsx`, picks the target part for
+each (column match → LLM fallback), allocates a `W{week}-NNN` task ID,
+and appends the row to that part workbook's 이번주 sheet.
+
+Sidecar JSON state at `<team>/<week>/_assignments_state.json` tracks
+processed row hashes so repeated cron ticks only handle new/modified rows.
 
 NOTE: _strip_code_fence logic is intentionally duplicated from compiler.py.tmpl
 (7 lines, zero external state). DRY's cost-benefit fails for this small,
 clearly bounded helper — extracting a shared module would couple two otherwise
 independent templates. Defer consolidation until a third consumer appears.
-
-Phase 2 (Wave B) adds:
-- generate_task_id(week, seq)             — W18-003 ID format
-- next_seq_for_week(part_xlsx_dir, team, week) — finds next free seq
-- resolve_target_part_v2(row, team, ...)  — group-aware part resolution
-- append_to_part_xlsx(...)                — write row to part xlsx 이번주 sheet
-- run_assign_v2(rows, team, week, ...)    — full v2 pipeline
-
-The legacy md-based path stays for the transition; CLI migrates in Wave E.
 """
 import hashlib
 import json
@@ -31,6 +26,9 @@ try:
 except ImportError:  # pragma: no cover — exercised by harness tests
     from openpyxl import load_workbook
     from scripts.xlsx_template import PART_SHEET_HEADERS
+
+
+_TASK_ID_RE = re.compile(r"^W(\d{1,2})-(\d{3})$")
 
 
 def _row_hash(row: Dict[str, Any]) -> str:
@@ -63,51 +61,6 @@ def diff_rows(rows: List[Dict[str, Any]], state_path: Path) -> Tuple[List[int], 
         elif known[i] != h:
             mod_idx.append(i)
     return new_idx, mod_idx
-
-
-def resolve_target_part(row: Dict[str, Any], parts: List[str], llm,
-                        dept_name: str, prompt_template_path: Path) -> Tuple[str, str]:
-    """Decide which part this row belongs to.
-
-    Returns (part_name, method) where method is "column" or "ai_inferred".
-    If LLM returns an invalid part, falls back to parts[0].
-    """
-    candidate = (row.get("담당파트") or "").strip()
-    if candidate in parts:
-        return candidate, "column"
-    sys_prompt = Template(Path(prompt_template_path).read_text(encoding="utf-8")).render(
-        dept_name=dept_name, parts=parts,
-    )
-    user_prompt = json.dumps(
-        {k: row.get(k, "") for k in ["일자", "지시내용", "우선순위", "마감", "비고"]},
-        ensure_ascii=False,
-    )
-    raw = llm.call(sys_prompt, user_prompt)
-    decision = json.loads(_strip_code_fence(raw))
-    inferred = decision["추정_담당파트"]
-    if inferred not in parts:
-        inferred = parts[0]
-    return inferred, "ai_inferred"
-
-
-def append_assignment(md_dir: Path, part: str, row: Dict[str, Any], timestamp: str) -> None:
-    """Append a new instruction block to <part>.md (creating file with header if missing)."""
-    md_dir = Path(md_dir)
-    md_dir.mkdir(parents=True, exist_ok=True)
-    md_path = md_dir / f"{part}.md"
-    block = (
-        f"\n### [추가됨 {timestamp}] {row.get('지시내용', '').strip()}\n"
-        f"- 일자: {row.get('일자', '')}\n"
-        f"- 우선순위: {row.get('우선순위', '')}\n"
-        f"- 마감: {row.get('마감', '')}\n"
-    )
-    if row.get("비고"):
-        block += f"- 비고: {row['비고']}\n"
-    if md_path.exists():
-        md_path.write_text(md_path.read_text(encoding="utf-8") + block, encoding="utf-8")
-    else:
-        header = f"# {part}\n\n## 그룹장 지시 (자동 분배)\n"
-        md_path.write_text(header + block, encoding="utf-8")
 
 
 def update_state(state_path: Path, rows: List[Dict[str, Any]],
@@ -146,32 +99,6 @@ def _carry_forward_state(state_path: Path, rows: List[Dict[str, Any]],
     return out
 
 
-def run_assign(rows: List[Dict[str, Any]], parts: List[str],
-               state_path: Path, md_dir: Path, llm, dept_name: str,
-               prompt_template_path: Path, timestamp: str) -> Dict[str, List[int]]:
-    """Run a single assign pass. Returns dict {part: [row_indices]} of affected parts."""
-    new_idx, mod_idx = diff_rows(rows, state_path)
-    affected: Dict[str, List[int]] = {}
-    skip = set(new_idx + mod_idx)
-    entries = list(_carry_forward_state(state_path, rows, skip))
-
-    for idx in new_idx + mod_idx:
-        row = rows[idx]
-        part, method = resolve_target_part(row, parts, llm, dept_name, prompt_template_path)
-        append_assignment(md_dir, part, row, timestamp)
-        affected.setdefault(part, []).append(idx)
-        entries.append((idx, part, method))
-
-    update_state(state_path, rows, entries)
-    return affected
-
-
-# --- Phase 2 (Wave B): xlsx-based assign with 업무ID ---
-
-
-_TASK_ID_RE = re.compile(r"^W(\d{1,2})-(\d{3})$")
-
-
 def generate_task_id(week: str, seq: int) -> str:
     """`W18-003`-style task ID from an ISO week string and a sequence number.
 
@@ -184,7 +111,7 @@ def generate_task_id(week: str, seq: int) -> str:
     return f"{week_short}-{seq:03d}"
 
 
-def _seq_from_task_id(task_id: str, week_short: str) -> int | None:
+def _seq_from_task_id(task_id: str, week_short: str):
     """Extract seq from `W18-NNN`, returning None if it isn't this week's prefix."""
     if not isinstance(task_id, str):
         return None
@@ -232,7 +159,7 @@ def _find_part_in_team(team, part_name: str):
     return None, None
 
 
-def resolve_target_part_v2(row: Dict[str, Any], team, llm, prompt_template_path: Path):
+def resolve_target_part(row: Dict[str, Any], team, llm, prompt_template_path: Path):
     """Group-aware part resolution.
 
     Returns (group, part, method) where method ∈ {"column", "ai_inferred"}.
@@ -296,7 +223,7 @@ def append_to_part_xlsx(
     wb.save(part_xlsx_path)
 
 
-def run_assign_v2(
+def run_assign(
     rows: List[Dict[str, Any]],
     team,
     week: str,
@@ -305,7 +232,7 @@ def run_assign_v2(
     llm,
     prompt_template_path: Path,
 ) -> Dict[str, List[str]]:
-    """Phase 2 assign tick.
+    """Run a single assign tick.
 
     Returns `{part_name: [task_id, ...]}` of parts touched this tick.
     Carries forward state for unchanged rows so cron reruns are idempotent.
@@ -322,7 +249,7 @@ def run_assign_v2(
 
     for idx in sorted(new_idx + mod_idx):
         row = rows[idx]
-        group, part, method = resolve_target_part_v2(
+        group, part, method = resolve_target_part(
             row, team=team, llm=llm, prompt_template_path=prompt_template_path,
         )
         task_id = generate_task_id(week, seq)

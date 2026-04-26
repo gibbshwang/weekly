@@ -1,17 +1,15 @@
-"""Compile stage — read all part .md files, call LLM, return structured result.
+"""Compile stage — read each part's xlsx, call LLM, return structured result.
 
 The LLM is invoked via subprocess (Codex CLI or Gemini CLI). The system
 prompt enforces JSON output. We tolerate occasional markdown code-fence
 wrapping and strip it before json.loads.
 
-Phase 2 (Wave C) adds:
-- collect_parts_v2(week_dir, team)  — reads xlsx 지난주 + 이번주 sheets
-- run_compile_v2(llm, team, week, parts_data, prompt_template_path)
-                                   — feeds the LLM the new task-centric
-                                     schema (지난주 / 이번주 항목 arrays
-                                     + 그룹별 요약 + 그룹장_확인필요)
-
-Legacy md-based path stays for the transition; CLI migrates in Wave E.
+Phase 2 task-centric pipeline:
+- collect_parts(week_dir, team)              — reads xlsx 지난주 + 이번주 sheets
+- run_compile(llm, team, week, parts_data, prompt_template_path)
+                                             — feeds the LLM the new schema
+                                               (지난주 / 이번주 항목 arrays
+                                                + 그룹별_요약 + 그룹장_확인필요)
 """
 import json
 from pathlib import Path
@@ -27,64 +25,15 @@ except ImportError:  # pragma: no cover — exercised by harness tests
     from scripts.xlsx_template import PART_SHEET_HEADERS
 
 
-def collect_parts(
-    md_dir: Path,
-    parts: List[str],
-    pattern: str = "{part}.md",
-) -> List[Tuple[str, str]]:
-    """Read each part's .md from `md_dir`. Returns list of (part_name, content).
-
-    Missing files are returned as (part_name, "") so the LLM can flag them.
-    """
-    out: List[Tuple[str, str]] = []
-    for part in parts:
-        path = md_dir / pattern.format(part=part)
-        if path.exists():
-            out.append((part, path.read_text(encoding="utf-8")))
-        else:
-            out.append((part, ""))
-    return out
-
-
 def _strip_code_fence(text: str) -> str:
     """Remove ```json ... ``` wrapping if present."""
     text = text.strip()
     if text.startswith("```"):
-        # split off the first fence line
         text = text.split("```", 2)[1]
-        # drop optional language tag
         if text.lstrip().startswith("json"):
             text = text.lstrip()[4:]
-        # remove trailing fence
         text = text.rsplit("```", 1)[0]
     return text.strip()
-
-
-def run_compile(
-    llm,
-    dept_name: str,
-    parts: List[str],
-    week: str,
-    parts_data: List[Tuple[str, str]],
-    prompt_template_path: Path,
-) -> Dict[str, Any]:
-    """Run a compile pass. Returns parsed JSON dict from the LLM."""
-    sys_prompt = Template(prompt_template_path.read_text(encoding="utf-8")).render(
-        dept_name=dept_name, parts=parts, week=week
-    )
-    user_lines = [f"## 부서 = {dept_name}, 주차 = {week}"]
-    for part_name, content in parts_data:
-        user_lines.append(f"\n--- 파트: {part_name} ---")
-        if content.strip():
-            user_lines.append(content)
-        else:
-            user_lines.append("(미작성)")
-    user_prompt = "\n".join(user_lines)
-    raw = llm.call(sys_prompt, user_prompt)
-    return json.loads(_strip_code_fence(raw))
-
-
-# --- Phase 2 (Wave C): xlsx-based collect + new schema run_compile ---
 
 
 def _read_part_workbook(part_xlsx_path: Path) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
@@ -110,7 +59,7 @@ def _read_part_workbook(part_xlsx_path: Path) -> Tuple[List[Dict[str, Any]], Lis
     return out["이번주"], out["지난주"]
 
 
-def collect_parts_v2(week_dir: Path, team) -> Dict[str, Dict[str, Any]]:
+def collect_parts(week_dir: Path, team) -> Dict[str, Dict[str, Any]]:
     """For each (group, part) in `team`, read its xlsx and return:
 
       {part_name: {"group": <group_name>,
@@ -160,8 +109,8 @@ def _format_row_for_llm(row: Dict[str, Any]) -> str:
     return "\n".join([head, *bullets, tail])
 
 
-def _build_user_prompt_v2(team_name: str, week: str, parts_data: Dict[str, Dict[str, Any]]) -> str:
-    """Render the structured Korean text payload the v2 prompt expects."""
+def _build_user_prompt(team_name: str, week: str, parts_data: Dict[str, Dict[str, Any]]) -> str:
+    """Render the structured Korean text payload the prompt expects."""
     lines = [f"## 팀: {team_name} | 주차: {week}", ""]
     # Group parts by their .group field so the model sees the org structure.
     by_group: Dict[str, List[Tuple[str, Dict[str, Any]]]] = {}
@@ -192,14 +141,14 @@ def _build_user_prompt_v2(team_name: str, week: str, parts_data: Dict[str, Dict[
     return "\n".join(lines)
 
 
-def run_compile_v2(
+def run_compile(
     llm,
     team,
     week: str,
     parts_data: Dict[str, Dict[str, Any]],
     prompt_template_path: Path,
 ) -> Dict[str, Any]:
-    """Phase 2 compile pass. Returns parsed JSON dict matching the v2 schema."""
+    """Run a compile pass. Returns parsed JSON dict matching the v2 schema."""
     groups_for_prompt = [
         {"name": g.name, "parts": [p.name for p in g.parts]}
         for g in team.groups
@@ -209,6 +158,6 @@ def run_compile_v2(
         groups=groups_for_prompt,
         week=week,
     )
-    user_prompt = _build_user_prompt_v2(team.name, week, parts_data)
+    user_prompt = _build_user_prompt(team.name, week, parts_data)
     raw = llm.call(sys_prompt, user_prompt)
     return json.loads(_strip_code_fence(raw))

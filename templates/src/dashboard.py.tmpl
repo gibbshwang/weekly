@@ -1,7 +1,10 @@
 """Dashboard renderer — Jinja2 template + minimal placeholder CSS.
 
-Phase 0 ships a minimal placeholder template. A future wave will replace
-`template_dashboard.html.j2` with the /design-consultation output.
+Phase 2 task-centric dashboard. Autoescape ON + custom nl2br filter
+inherited from FIX-01: every Jinja substitution is HTML-escaped by
+default, and the dedicated nl2br filter escapes its input first before
+inserting trusted <br> markup so attacker-controlled content (LLM
+prompt-injection in summary text, etc.) cannot synthesize new tags.
 """
 from datetime import datetime
 from pathlib import Path
@@ -12,14 +15,7 @@ from markupsafe import Markup, escape
 
 
 def _nl2br_safe(value: Any) -> Markup:
-    """Escape value, then convert real \\n to <br>.
-
-    The previous template used `value | replace('\\n', '<br>') | safe`, which
-    is a forge: any HTML the LLM happened to emit (or that prompt-injection
-    coerced it to emit) would be rendered live. By escaping first and only
-    inserting trusted <br> markup afterwards, attacker-controlled input can
-    never synthesize a real tag.
-    """
+    """Escape value, then convert real \\n to <br>."""
     return Markup(str(escape(value)).replace("\n", "<br>"))
 
 
@@ -34,37 +30,15 @@ def _build_env(template_dir: Path) -> Environment:
 
 def render_dashboard(
     result: Dict[str, Any],
-    dept_name: str,
-    week: str,
-    template_path: Path,
-    weekly_version: str = "0.1.0",
-) -> str:
-    """Render the dashboard HTML from a compile result dict."""
-    template_path = Path(template_path)
-    env = _build_env(template_path.parent)
-    tmpl = env.get_template(template_path.name)
-    return tmpl.render(
-        result=result,
-        dept_name=dept_name,
-        week=week,
-        generated_at=datetime.now().isoformat(timespec="seconds"),
-        weekly_version=weekly_version,
-    )
-
-
-def render_dashboard_v2(
-    result: Dict[str, Any],
     team_name: str,
     week: str,
     template_path: Path,
     weekly_version: str = "0.2.0",
 ) -> str:
-    """Phase 2 dashboard renderer — task-centric schema (지난주/이번주 + 그룹별).
+    """Render the dashboard HTML from a Phase 2 compile result dict.
 
-    Same Jinja2 Environment + autoescape + nl2br protections as v1
-    (FIX-01); the v2 template just consumes the new top-level keys
-    (`팀_종합_요약`, `지난주.항목`, `이번주.항목`, `그룹별_요약`,
-    `그룹장_확인필요`) instead of `부서_종합_요약` / `파트별_핵심`.
+    Expected top-level keys: 팀_종합_요약, 지난주.{요약, 항목}, 이번주.{요약, 항목},
+    그룹별_요약, 그룹장_확인필요, 미작성_파트, 주의사항.
     """
     template_path = Path(template_path)
     env = _build_env(template_path.parent)
