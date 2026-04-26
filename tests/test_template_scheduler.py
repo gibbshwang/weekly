@@ -386,6 +386,68 @@ def test_install_task_argv_rejects_nul_in_element(tmp_path: Path, monkeypatch):
             )
 
 
+@pytest.mark.parametrize("cmd_meta", ["&", "|", "<", ">", "^"])
+def test_install_task_argv_rejects_windows_cmd_meta_on_win32(tmp_path: Path, monkeypatch, cmd_meta):
+    """Windows defense-in-depth: even though weekly's own validators keep
+    team/group/part names slug-safe, a third-party caller of install_task
+    could pass a value like 'x&calc.exe'. On Windows that becomes a
+    cmd.exe metacharacter inside the /TR string. Reject before it reaches
+    schtasks. (Unix platforms handle these via shlex.quote and don't need
+    to reject — covered by test_install_task_quotes_argv_with_spaces_unix.)"""
+    monkeypatch.setattr(sys, "platform", "win32")
+    s = _load_sched(tmp_path)
+    fake_run = MagicMock(return_value=MagicMock(returncode=0, stdout="", stderr=""))
+    with patch.object(s, "subprocess") as fake_subproc:
+        fake_subproc.run = fake_run
+        with pytest.raises(ValueError):
+            s.install_task(
+                name="weekly-x-assign", cron="0 * * * *",
+                argv=[r"C:\path\wreport.exe", "assign", f"x{cmd_meta}calc"],
+                working_dir=r"C:\x",
+            )
+
+
+def test_install_task_argv_allows_windows_cmd_meta_on_unix(tmp_path: Path, monkeypatch):
+    """Unix shells handle &|<>^ via shlex.quote. The win32-specific reject
+    must NOT fire on Unix platforms (or tests would over-restrict)."""
+    monkeypatch.setattr(sys, "platform", "linux")
+    s = _load_sched(tmp_path)
+    state = {}
+    with patch.object(s, "subprocess") as fake_subproc:
+        fake_subproc.run = MagicMock(side_effect=_capture_unix_run(state))
+        # No exception — `&` survives via shlex.quote
+        s.install_task(
+            name="weekly-x-assign", cron="0 * * * *",
+            argv=["wreport", "assign", "x&y"],
+            working_dir="/x",
+        )
+    written = state["written"]
+    assert "'x&y'" in written, f"shlex.quote should wrap with `'`: {written}"
+
+
+def test_install_task_argv_windows_quotes_every_arg(tmp_path: Path, monkeypatch):
+    """Defense-in-depth: on Windows, every argv element gets wrapped in
+    `\"...\"` so a careless caller can't accidentally produce a cmd.exe
+    parsing surprise even with a value the validator missed."""
+    monkeypatch.setattr(sys, "platform", "win32")
+    s = _load_sched(tmp_path)
+    fake_run = MagicMock(return_value=MagicMock(returncode=0, stdout="", stderr=""))
+    with patch.object(s, "subprocess") as fake_subproc:
+        fake_subproc.run = fake_run
+        s.install_task(
+            name="weekly-x-prepare",
+            cron="0 6 * * 1",
+            argv=[r"C:\path\wreport.exe", "prepare", "팀"],
+            working_dir=r"C:\path",
+        )
+    cmd = fake_run.call_args[0][0]
+    tr_value = cmd[cmd.index("/TR") + 1]
+    # All three args quoted (path / sub-command / team name)
+    assert r'"C:\path\wreport.exe"' in tr_value
+    assert '"prepare"' in tr_value
+    assert '"팀"' in tr_value
+
+
 def test_install_task_argv_windows_quotes_path_with_spaces(tmp_path: Path, monkeypatch):
     """Windows /TR string must wrap path-with-spaces in double quotes so
     cmd.exe parses it as a single argument at trigger time."""

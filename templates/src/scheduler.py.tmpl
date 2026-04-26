@@ -38,11 +38,18 @@ _TASK_NAME_RE = re.compile(r"^[가-힣A-Za-z0-9_-]{1,80}$")
 # the Windows /TR string quoting we add ourselves.
 _FORBIDDEN_DIR_CHARS = set("\"\r\n\x00%")
 
-# Characters forbidden inside argv elements. We quote each element ourselves
-# at build time (shlex on Unix, double-quote on Windows), so spaces and
-# even quotes in *path* elements would be allowed in principle — but newlines
-# / NUL / CR / `%` would still smuggle past the per-platform shell parsers.
+# Characters forbidden inside argv elements (Unix). We quote each element
+# ourselves at build time (shlex.quote), so spaces and even quotes in *path*
+# elements would be allowed in principle — but newlines / NUL / CR / `%`
+# would still smuggle past the per-platform shell parsers.
 _FORBIDDEN_ARGV_CHARS = set("\r\n\x00%")
+
+# Defense-in-depth on Windows: cmd.exe metacharacters that would still be
+# meaningful even after the /TR string is built. Even though weekly's own
+# callers route through slug-validated names, this scheduler module is a
+# reusable primitive; reject these chars on win32 so a careless argv from
+# any caller cannot produce a cmd.exe parsing surprise.
+_FORBIDDEN_ARGV_CHARS_WIN32 = _FORBIDDEN_ARGV_CHARS | set("&|<>^")
 
 
 def _validate_cron(cron: str) -> str:
@@ -88,9 +95,13 @@ def _validate_against(value: str, label: str, forbidden: set) -> str:
 def _validate_argv(argv) -> List[str]:
     if not isinstance(argv, (list, tuple)) or not argv:
         raise ValueError(f"argv must be a non-empty list/tuple, got {argv!r}")
+    forbidden = (
+        _FORBIDDEN_ARGV_CHARS_WIN32 if sys.platform == "win32"
+        else _FORBIDDEN_ARGV_CHARS
+    )
     out: List[str] = []
     for i, a in enumerate(argv):
-        out.append(_validate_against(a, f"argv[{i}]", _FORBIDDEN_ARGV_CHARS))
+        out.append(_validate_against(a, f"argv[{i}]", forbidden))
     return out
 
 
@@ -161,11 +172,11 @@ def _windows_schedule_flags(cron: str) -> List[str]:
 
 
 def _install_windows(name: str, cron: str, argv: List[str], working_dir: str) -> None:
-    # argv[0] is the executable path → always quote (round-trips exactly).
-    # Subsequent args use smart quoting (only quote if needed).
-    quoted_command = " ".join(
-        [_win_quote_path(argv[0])] + [_win_quote_arg(a) for a in argv[1:]]
-    )
+    # Defense-in-depth: always wrap every argv element in `"..."` on Windows.
+    # cmd.exe parsing surprises would otherwise depend on which characters a
+    # value happens to contain — easier to reason about uniformly. Forbidden
+    # cmd.exe metachars are already rejected by _validate_argv on win32.
+    quoted_command = " ".join(_win_quote_path(a) for a in argv)
     quoted_dir = _win_quote_path(working_dir)
     cmd = [
         "schtasks", "/Create", "/TN", name, "/F",
