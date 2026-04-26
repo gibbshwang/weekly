@@ -473,6 +473,30 @@ def test_run_assign_appends_to_correct_parts_with_task_ids(tmp_path: Path):
     assert "운영 task" in rows2[0]
 
 
+def test_run_assign_raises_clear_error_when_part_workbooks_missing(tmp_path: Path):
+    """Regression: if `wreport prepare <팀>` was skipped (or week_dir wasn't
+    created), assign should fail with a message that points the operator at
+    the missing step, not a confusing low-level openpyxl FileNotFoundError."""
+    a = _load_assigner(tmp_path)
+    fake_llm = MagicMock()
+    team = _team()
+    week_dir = tmp_path / "2026-W18"  # NOT created — prepare was skipped
+    state_path = tmp_path / "_state.json"
+
+    rows = [
+        {"일자": "x", "지시내용": "task A",
+         "담당파트": "전략기획", "우선순위": "높음", "마감": "x", "비고": ""},
+    ]
+    import pytest
+    with pytest.raises(FileNotFoundError) as excinfo:
+        a.run_assign(rows=rows, team=team, week="2026-W18",
+                     state_path=state_path, part_xlsx_dir=week_dir,
+                     llm=fake_llm, prompt_template_path=PROMPT_PATH)
+    msg = str(excinfo.value)
+    assert "prepare" in msg, f"error must mention 'prepare' to guide the operator: {msg}"
+    assert "2026-W18" in msg, f"error must include the week: {msg}"
+
+
 def test_run_assign_idempotent_on_second_call(tmp_path: Path):
     a = _load_assigner(tmp_path)
     fake_llm = MagicMock()
