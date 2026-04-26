@@ -22,8 +22,10 @@ _USER_INPUT_COLS = (
     "이슈_장애",
     "리스크_지원요청",
     "다음액션_차주계획",
-    "비고",
 )
+# 비고 is intentionally excluded — assigner copies the instructor's 비고 from
+# _지시사항.xlsx automatically, so a row with only 비고 set is still "untouched
+# by the lead" and must classify as 'empty' (mirrors compiler USER_INPUT_HEADERS).
 # These need to match the ordering in xlsx_template.PART_SHEET_HEADERS
 # (kept inline here so this template doesn't have to import xlsx_template).
 _PART_HEADERS = (

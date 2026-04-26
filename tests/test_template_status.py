@@ -57,6 +57,29 @@ def test_compute_status_marks_empty_file(tmp_path: Path):
     assert statuses[0]["status"] == "empty"
 
 
+def test_compute_status_비고_alone_does_not_count_as_written(tmp_path: Path):
+    """Regression: assigner copies 비고 from _지시사항.xlsx automatically.
+    A row with only auto-populated content (including 비고) and nothing in
+    part-lead columns must classify as 'empty', not 'written'."""
+    s = _load_status(tmp_path)
+    week_dir = tmp_path / "week"
+    week_dir.mkdir()
+    out = _make_part_xlsx(week_dir, "전략기획", with_data=False)
+    wb = load_workbook(out)
+    # All part-lead cols blank (상태/처리결과/이슈/리스크/액션). Only 비고 set.
+    wb["이번주"].append([
+        "W18-001", "지시사항", "auto task", "",       # 업무ID, 출처, 지시내용, 상태
+        "", "", "", "",                                # 처리결과/이슈/리스크/액션
+        "2026-04-30", "높음", "임원 보고용",            # 마감, 우선순위, 비고
+    ])
+    wb.save(out)
+    statuses = s.compute_status(week_dir, parts=["전략기획"])
+    assert statuses[0]["status"] == "empty", (
+        "비고-alone row was misclassified — instructor's 비고 must not flip status"
+    )
+    assert statuses[0]["rows"] == 0
+
+
 def test_compute_status_includes_row_count_and_mtime(tmp_path: Path):
     s = _load_status(tmp_path)
     week_dir = tmp_path / "week"

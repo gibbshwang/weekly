@@ -131,6 +131,36 @@ def test_collect_parts_marks_empty_workbook_as_미작성(tmp_path: Path):
     assert parts_data["전략기획"]["미작성"] is True
 
 
+def test_collect_parts_비고_alone_does_not_count_as_written(tmp_path: Path):
+    """Regression: assigner copies 비고 from _지시사항.xlsx into the part
+    workbook automatically. A row with ONLY auto-populated columns (업무ID,
+    출처, 업무_지시내용, 마감, 우선순위, 비고) and nothing in part-lead
+    columns must still be classified as 미작성. Otherwise instructors who
+    add 비고 to their directive flip the part to 'written' before the lead
+    has touched anything."""
+    compiler = _load_compiler(tmp_path)
+    team = _team()
+    week_dir = tmp_path / "2026-W18"
+    _seed_part_xlsx(
+        week_dir, team, "전략기획",
+        이번주_rows=[
+            {
+                "업무ID": "W18-001", "출처": "지시사항",
+                "업무_지시내용": "auto-assigned task",
+                "상태": "", "이번주_처리결과": "",
+                "이슈_장애": "", "리스크_지원요청": "",
+                "다음액션_차주계획": "",
+                "마감": "2026-04-30", "우선순위": "높음",
+                "비고": "임원 보고용",   # instructor's note auto-copied
+            },
+        ],
+    )
+    parts_data = compiler.collect_parts(week_dir, team)
+    assert parts_data["전략기획"]["미작성"] is True, (
+        "비고-alone row was misclassified as 'written'"
+    )
+
+
 # --- run_compile ---
 
 

@@ -93,16 +93,17 @@ def _read_part_workbook(part_xlsx_path: Path) -> Tuple[List[Dict[str, Any]], Lis
 
 
 # Columns the part lead is responsible for filling in. assign auto-creates
-# rows with 업무ID + 출처 + 업무_지시내용 + 마감 + 우선순위 populated, but
-# leaves all of these blank — so 미작성 must be defined as "the lead has
-# not touched any user-input column", not just "no rows exist".
+# rows with 업무ID + 출처 + 업무_지시내용 + 마감 + 우선순위 + 비고 populated
+# (비고 is copied from _지시사항.xlsx — instructor's note, NOT lead input).
+# 미작성 means "the lead has not touched any column they own", which is
+# the part-status columns below — 비고 is excluded so an instructor-supplied
+# note does not flip the part to 'written' before the lead opens the file.
 USER_INPUT_HEADERS = (
     "상태",
     "이번주_처리결과",
     "이슈_장애",
     "리스크_지원요청",
     "다음액션_차주계획",
-    "비고",
 )
 
 
