@@ -1,4 +1,8 @@
-"""Tests for the Phase 2 excel reader (7-col 지시사항.xlsx)."""
+"""Tests for the Phase 2 excel reader (6-col 지시사항.xlsx).
+
+Reader expects header = [일자, 지시내용, 담당파트, 우선순위, 마감, 비고].
+담당그룹은 지시자 입력에서 제외 (assigner가 team membership으로 역산).
+"""
 import importlib.util
 from pathlib import Path
 

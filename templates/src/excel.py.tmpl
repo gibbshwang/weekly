@@ -1,7 +1,10 @@
-"""Excel reader for `_지시사항.xlsx` (Phase 2 — 7-column header).
+"""Excel reader for `_지시사항.xlsx` (Phase 2 — 6-column header).
 
 Reads all data rows (skipping header) into list of dicts keyed by column name.
 Computes stable hash per row for change detection (sidecar JSON state).
+
+Header is 6 columns (일자/지시내용/담당파트/우선순위/마감/비고). 담당그룹은
+시스템이 담당파트 → team membership으로 역산하므로 지시자 입력에서 제외.
 """
 import hashlib
 import json

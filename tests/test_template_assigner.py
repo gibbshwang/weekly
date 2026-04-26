@@ -255,7 +255,7 @@ def test_resolve_target_part_uses_column_when_filled(tmp_path: Path):
     a = _load_assigner(tmp_path)
     fake_llm = MagicMock()
     team = _team()
-    row = {"일자": "x", "지시내용": "x", "담당그룹": "사업그룹",
+    row = {"일자": "x", "지시내용": "x",
            "담당파트": "전략기획", "우선순위": "보통", "마감": "x", "비고": ""}
     group, part, method = a.resolve_target_part(
         row, team=team, llm=fake_llm,
@@ -274,8 +274,7 @@ def test_resolve_target_part_calls_llm_when_part_empty(tmp_path: Path):
         "추정_담당파트": "사업개발", "확신도": 0.8, "근거": "고객사 미팅"
     }, ensure_ascii=False)
     team = _team()
-    row = {"일자": "x", "지시내용": "고객사 미팅", "담당그룹": "",
-           "담당파트": "", "우선순위": "x", "마감": "x", "비고": ""}
+    row = {"일자": "x", "지시내용": "고객사 미팅", "담당파트": "", "우선순위": "x", "마감": "x", "비고": ""}
     group, part, method = a.resolve_target_part(
         row, team=team, llm=fake_llm,
         prompt_template_path=PROMPT_PATH,
@@ -292,8 +291,7 @@ def test_resolve_target_part_falls_back_when_llm_returns_invalid(tmp_path: Path)
         "추정_담당파트": "무효한파트", "확신도": 0.3, "근거": "x"
     }, ensure_ascii=False)
     team = _team()
-    row = {"일자": "x", "지시내용": "x", "담당그룹": "",
-           "담당파트": "", "우선순위": "x", "마감": "x", "비고": ""}
+    row = {"일자": "x", "지시내용": "x", "담당파트": "", "우선순위": "x", "마감": "x", "비고": ""}
     group, part, method = a.resolve_target_part(
         row, team=team, llm=fake_llm, prompt_template_path=PROMPT_PATH,
     )
@@ -307,8 +305,7 @@ def test_resolve_target_part_handles_codex_code_fence(tmp_path: Path):
     a = _load_assigner(tmp_path)
     fake_llm = MagicMock()
     fake_llm.call.return_value = '```json\n{"추정_담당파트":"전략기획","확신도":0.7,"근거":"전략 키워드"}\n```'
-    row = {"일자": "x", "지시내용": "전략 수립", "담당그룹": "",
-           "담당파트": "", "우선순위": "x", "마감": "x", "비고": ""}
+    row = {"일자": "x", "지시내용": "전략 수립", "담당파트": "", "우선순위": "x", "마감": "x", "비고": ""}
     group, part, method = a.resolve_target_part(
         row, team=_team(), llm=fake_llm, prompt_template_path=PROMPT_PATH,
     )
@@ -342,8 +339,7 @@ def test_resolve_target_part_includes_part_role_in_prompt(tmp_path: Path):
         "추정_담당파트": "사업개발", "확신도": 0.9, "근거": "고객사 키워드"
     }, ensure_ascii=False)
     team = _team_with_roles()
-    row = {"일자": "x", "지시내용": "고객사 미팅", "담당그룹": "",
-           "담당파트": "", "우선순위": "x", "마감": "x", "비고": ""}
+    row = {"일자": "x", "지시내용": "고객사 미팅", "담당파트": "", "우선순위": "x", "마감": "x", "비고": ""}
     a.resolve_target_part(
         row, team=team, llm=fake_llm, prompt_template_path=PROMPT_PATH,
     )
@@ -364,8 +360,7 @@ def test_resolve_target_part_handles_parts_without_role(tmp_path: Path):
         "추정_담당파트": "운영관리", "확신도": 0.6, "근거": "운영 키워드"
     }, ensure_ascii=False)
     team = _team_with_roles()
-    row = {"일자": "x", "지시내용": "운영 점검", "담당그룹": "",
-           "담당파트": "", "우선순위": "x", "마감": "x", "비고": ""}
+    row = {"일자": "x", "지시내용": "운영 점검", "담당파트": "", "우선순위": "x", "마감": "x", "비고": ""}
     a.resolve_target_part(
         row, team=team, llm=fake_llm, prompt_template_path=PROMPT_PATH,
     )
@@ -421,9 +416,9 @@ def test_run_assign_appends_to_correct_parts_with_task_ids(tmp_path: Path):
     _create_week_workbooks(week_dir, team)
 
     rows = [
-        {"일자": "2026-04-27", "지시내용": "전략 task", "담당그룹": "사업그룹",
+        {"일자": "2026-04-27", "지시내용": "전략 task",
          "담당파트": "전략기획", "우선순위": "높음", "마감": "2026-04-30", "비고": ""},
-        {"일자": "2026-04-27", "지시내용": "운영 task", "담당그룹": "운영그룹",
+        {"일자": "2026-04-27", "지시내용": "운영 task",
          "담당파트": "운영관리", "우선순위": "보통", "마감": "2026-05-01", "비고": ""},
     ]
     affected = a.run_assign(
@@ -455,7 +450,7 @@ def test_run_assign_idempotent_on_second_call(tmp_path: Path):
     state_path = tmp_path / "_state.json"
 
     rows = [
-        {"일자": "x", "지시내용": "task A", "담당그룹": "사업그룹",
+        {"일자": "x", "지시내용": "task A",
          "담당파트": "전략기획", "우선순위": "높음", "마감": "x", "비고": ""},
     ]
     a.run_assign(rows=rows, team=team, week="2026-W18",
