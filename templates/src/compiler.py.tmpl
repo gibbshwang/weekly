@@ -12,10 +12,43 @@ Phase 2 task-centric pipeline:
                                                 + 그룹별_요약 + 그룹장_확인필요)
 """
 import json
+import re
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 from jinja2 import Template
+
+
+_ISO_WEEK_RE = re.compile(r"^(\d{4})-W(\d{1,2})$")
+
+
+def _week_date_ranges(week: str) -> Dict[str, str]:
+    """Return Mon–Sun ISO date strings for the given ISO week and the next.
+
+    Input format is `YYYY-Www` (e.g. `2026-W18`). Output keys:
+    `this_week_start`, `this_week_end`, `next_week_start`, `next_week_end`.
+
+    Used by `run_compile` to inject deterministic dates into the prompt so
+    the LLM doesn't have to compute "이번 주" / "다음 주" itself — that path
+    fails when the model's training cutoff predates the report week.
+    """
+    m = _ISO_WEEK_RE.fullmatch(week.strip())
+    if not m:
+        raise ValueError(
+            f"Invalid ISO week format {week!r}; expected 'YYYY-Www' (e.g. '2026-W18')"
+        )
+    year, wk = int(m.group(1)), int(m.group(2))
+    this_mon = date.fromisocalendar(year, wk, 1)
+    this_sun = date.fromisocalendar(year, wk, 7)
+    next_mon = this_mon + timedelta(days=7)
+    next_sun = this_sun + timedelta(days=7)
+    return {
+        "this_week_start": this_mon.isoformat(),
+        "this_week_end": this_sun.isoformat(),
+        "next_week_start": next_mon.isoformat(),
+        "next_week_end": next_sun.isoformat(),
+    }
 
 try:
     from openpyxl import load_workbook
@@ -176,10 +209,12 @@ def run_compile(
         {"name": g.name, "parts": [p.name for p in g.parts]}
         for g in team.groups
     ]
+    date_ranges = _week_date_ranges(week)
     sys_prompt = Template(Path(prompt_template_path).read_text(encoding="utf-8")).render(
         team_name=team.name,
         groups=groups_for_prompt,
         week=week,
+        **date_ranges,
     )
     user_prompt = _build_user_prompt(team.name, week, parts_data)
     raw = llm.call(sys_prompt, user_prompt)
