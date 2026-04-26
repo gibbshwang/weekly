@@ -274,6 +274,51 @@ def test_week_date_ranges_rejects_malformed_input(tmp_path: Path):
         compiler._week_date_ranges("nonsense")
 
 
+def test_run_compile_normalizes_missing_keys(tmp_path: Path):
+    """LLMs sometimes drop keys. The compile result must always have every
+    top-level key with a sensible default so dashboard render can't KeyError."""
+    compiler = _load_compiler(tmp_path)
+    fake_llm = MagicMock()
+    fake_llm.call.return_value = json.dumps({"팀_종합_요약": "요약만"}, ensure_ascii=False)
+    result = compiler.run_compile(
+        llm=fake_llm, team=_team(), week="2026-W18",
+        parts_data={}, prompt_template_path=PROMPT_PATH,
+    )
+    assert result["팀_종합_요약"] == "요약만"
+    # Every other key present with empty default
+    assert result["지난주"] == {"요약": "", "항목": []}
+    assert result["이번주"] == {"요약": "", "항목": []}
+    assert result["그룹별_요약"] == {}
+    assert result["그룹장_확인필요"] == []
+    assert result["미작성_파트"] == []
+    assert result["주의사항"] == []
+
+
+def test_run_compile_coerces_wrong_types_to_defaults(tmp_path: Path):
+    """If LLM returns a string where a list was specified, normalize to []."""
+    compiler = _load_compiler(tmp_path)
+    fake_llm = MagicMock()
+    fake_llm.call.return_value = json.dumps({
+        "팀_종합_요약": "ok",
+        "지난주": "이건 dict 아니라 str",       # wrong type
+        "이번주": {"요약": 42, "항목": "list 아님"},  # wrong inner types
+        "그룹별_요약": [],                      # wrong: list instead of dict
+        "그룹장_확인필요": "단일 문자열",        # wrong: str instead of list
+        "미작성_파트": None,
+        "주의사항": "string",
+    }, ensure_ascii=False)
+    result = compiler.run_compile(
+        llm=fake_llm, team=_team(), week="2026-W18",
+        parts_data={}, prompt_template_path=PROMPT_PATH,
+    )
+    assert result["지난주"] == {"요약": "", "항목": []}
+    assert result["이번주"] == {"요약": "", "항목": []}
+    assert result["그룹별_요약"] == {}
+    assert result["그룹장_확인필요"] == []
+    assert result["미작성_파트"] == []
+    assert result["주의사항"] == []
+
+
 def test_run_compile_injects_date_ranges_into_prompt(tmp_path: Path):
     """Compile must compute this/next week date ranges in Python and pass
     them to the prompt template so the LLM stops guessing the calendar.

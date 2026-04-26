@@ -150,6 +150,24 @@ def test_cli_previous_iso_week_for_parses_target_week():
     assert f("2026-W01") == "2025-W52"
 
 
+def test_cli_assign_catches_filenotfound_for_clean_cli_message():
+    """assign_cmd must catch FileNotFoundError from run_assign and emit a
+    clean CLI error (click.exceptions.Exit) rather than letting the
+    traceback bubble up — improves cron-log readability and tells the
+    operator what to do."""
+    text = _cli_text()
+    import re as _re
+    m = _re.search(r"def assign_cmd\(.*?\n(?=\n@|\Z)", text, _re.DOTALL)
+    assert m, "assign_cmd block not found"
+    body = m.group(0)
+    assert "except FileNotFoundError" in body, (
+        "assign_cmd must catch FileNotFoundError from run_assign"
+    )
+    assert "click.exceptions.Exit" in body or "click.Abort" in body or "ctx.exit" in body, (
+        "assign_cmd must exit cleanly via click rather than raising a Python traceback"
+    )
+
+
 def test_cli_assign_uses_lazy_llm_so_path_check_is_deferred():
     """assign cron runs hourly. If every queued instruction has 담당파트
     pre-filled (or there are no new rows at all), AI is not actually needed.
