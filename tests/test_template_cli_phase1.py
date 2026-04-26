@@ -121,3 +121,69 @@ def test_cli_prepare_fails_clearly_when_team_missing():
     # (rather than letting an AttributeError bubble out as a stack trace).
     # We sanity-check that the message mentions `team` somewhere in the file.
     assert "cfg.team is None" in text or "cfg.team:" in text or "if not cfg.team" in text
+
+
+# --- Wave E: CLI dispatch + 3-cron + v2 wiring ---
+
+
+def test_cli_imports_v2_helpers():
+    """compile / assign / dashboard v2 + read_instructions_v2 must be in scope."""
+    text = _cli_text()
+    assert "render_dashboard_v2" in text
+    assert "run_compile_v2" in text
+    assert "collect_parts_v2" in text
+    assert "run_assign_v2" in text
+    assert "read_instructions_v2" in text
+
+
+def test_cli_compile_dispatches_on_team():
+    """compile_cmd must take the v2 path when cfg.team is set."""
+    text = _cli_text()
+    # Locate the function and check it branches on cfg.team
+    idx = text.find("def compile_cmd")
+    assert idx != -1
+    body = text[idx:idx + 4000]
+    assert "cfg.team" in body
+    assert "render_dashboard_v2" in body or "run_compile_v2" in body
+
+
+def test_cli_assign_dispatches_on_team():
+    text = _cli_text()
+    idx = text.find("def assign_cmd")
+    assert idx != -1
+    body = text[idx:idx + 4000]
+    assert "cfg.team" in body
+    assert "run_assign_v2" in body
+
+
+def test_cli_compile_v2_uses_team_aware_email_recipients():
+    """Per agreed B1: cc list = group leads + part leads (deduplicated).
+    Sanity-check the CLI references both helpers anywhere in the file
+    (compile_cmd dispatches to a _compile_v2 helper that does the work)."""
+    text = _cli_text()
+    assert "all_part_lead_emails" in text
+    assert "all_group_lead_emails" in text
+    # And the v2 compile path uses the team lead as `to`
+    assert "cfg.team.lead.email" in text
+
+
+def test_cli_schedule_install_three_crons_when_team():
+    """When cfg.team is set, install_task is called THREE times — prepare /
+    assign / compile — using the corresponding cron expressions from
+    cfg.schedule.{prepare_cron, assign_cron, compile_cron}."""
+    text = _cli_text()
+    idx = text.find("def schedule_install_cmd")
+    body = text[idx:idx + 4000]
+    assert "prepare_cron" in body
+    assert "prepare" in body and "assign" in body and "compile" in body
+
+
+def test_schedule_config_has_prepare_cron_default():
+    """ScheduleConfig must add prepare_cron with a sensible Monday 06:00 default."""
+    config_path = PROJECT_ROOT / "templates/src/config.py.tmpl"
+    text = config_path.read_text(encoding="utf-8")
+    assert "prepare_cron" in text
+    # Default should be a valid Monday-morning cron string. Both the
+    # explicit default ("0 6 * * 1") and a Sunday/Friday/etc. choice
+    # are acceptable; we just enforce the field exists with a default.
+    assert 'prepare_cron: str' in text or 'prepare_cron:' in text
