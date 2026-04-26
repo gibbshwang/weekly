@@ -81,6 +81,16 @@ def scaffold_project(
     llm_src = bundle_root / "scripts" / "lib" / "llm_call.py"
     (pkg / "_llm.py").write_text(llm_src.read_text(encoding="utf-8"), encoding="utf-8")
 
+    # 3b. Copy scripts/xlsx_template.py -> weekly_runtime/xlsx_template.py.
+    # prepare/assigner/compiler all import from `weekly_runtime.xlsx_template`
+    # at runtime (with a harness-only fallback to scripts.xlsx_template). The
+    # standalone scaffolded project has no scripts/ directory, so without this
+    # copy the imports raise ImportError on first wreport invocation.
+    xlsx_src = bundle_root / "scripts" / "xlsx_template.py"
+    (pkg / "xlsx_template.py").write_text(
+        xlsx_src.read_text(encoding="utf-8"), encoding="utf-8"
+    )
+
     # 4. Copy template_dashboard_v2.html.j2 -> weekly_runtime/templates/.
     pkg_templates = pkg / "templates"
     pkg_templates.mkdir(parents=True, exist_ok=True)

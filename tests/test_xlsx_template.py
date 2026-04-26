@@ -48,33 +48,17 @@ def _stub_team():
 # --- generate_directives_xlsx (7-col) ---
 
 
-def test_directives_xlsx_has_seven_column_header(tmp_path: Path):
+def test_directives_xlsx_has_six_column_header(tmp_path: Path):
+    """Direct-instructor UX: 6 columns only (담당그룹 omitted; system reverse-
+    derives it from 담당파트 via team membership)."""
     out = tmp_path / "_지시사항.xlsx"
     generate_directives_xlsx(out_path=out, team=_stub_team())
     wb = load_workbook(out)
     ws = wb.active
     headers = [c.value for c in next(ws.iter_rows(min_row=1, max_row=1))]
     assert headers == [
-        "일자", "지시내용", "담당그룹", "담당파트", "우선순위", "마감", "비고",
+        "일자", "지시내용", "담당파트", "우선순위", "마감", "비고",
     ]
-
-
-def test_directives_xlsx_group_dropdown_uses_refs(tmp_path: Path):
-    out = tmp_path / "_지시사항.xlsx"
-    generate_directives_xlsx(out_path=out, team=_stub_team())
-    wb = load_workbook(out)
-    ws = wb.active
-    dv_group = next(
-        dv for dv in ws.data_validations.dataValidation
-        if any("C2" in r.coord for r in dv.sqref.ranges)
-    )
-    assert "_refs" in (dv_group.formula1 or "")
-    assert "사업그룹" not in (dv_group.formula1 or "")  # not inlined
-
-    refs = wb["_refs"]
-    assert refs.sheet_state == "hidden"
-    group_cells = [refs.cell(row=i, column=1).value for i in range(1, 3)]
-    assert group_cells == ["사업그룹", "운영그룹"]
 
 
 def test_directives_xlsx_part_dropdown_lists_all_parts_from_all_groups(tmp_path: Path):
@@ -82,13 +66,15 @@ def test_directives_xlsx_part_dropdown_lists_all_parts_from_all_groups(tmp_path:
     generate_directives_xlsx(out_path=out, team=_stub_team())
     wb = load_workbook(out)
     ws = wb.active
+    # 담당파트 = column C (3rd)
     dv_part = next(
         dv for dv in ws.data_validations.dataValidation
-        if any("D2" in r.coord for r in dv.sqref.ranges)
+        if any("C2" in r.coord for r in dv.sqref.ranges)
     )
     assert "_refs" in (dv_part.formula1 or "")
     refs = wb["_refs"]
-    part_cells = [refs.cell(row=i, column=2).value for i in range(1, 4)]
+    assert refs.sheet_state == "hidden"
+    part_cells = [refs.cell(row=i, column=1).value for i in range(1, 4)]
     assert part_cells == ["전략기획", "사업개발", "운영관리"]
 
 
@@ -99,6 +85,19 @@ def test_directives_xlsx_priority_dropdown_unchanged(tmp_path: Path):
     ws = wb.active
     formulas = [dv.formula1 for dv in ws.data_validations.dataValidation]
     assert any("높음" in (f or "") and "낮음" in (f or "") for f in formulas)
+
+
+def test_part_xlsx_지난주_완료_is_hidden(tmp_path: Path):
+    """지난주_완료 is an archive sheet — hide it from the part lead so they
+    only see 지난주 + 이번주 (the two sheets they're expected to fill)."""
+    out = tmp_path / "전략기획.xlsx"
+    generate_part_xlsx(out_path=out, team_name="기획팀", group_name="사업그룹",
+                       part_name="전략기획", week="2026-W18")
+    wb = load_workbook(out)
+    assert wb["지난주_완료"].sheet_state == "hidden"
+    # 지난주 and 이번주 stay visible
+    assert wb["이번주"].sheet_state in ("visible", None)
+    assert wb["지난주"].sheet_state in ("visible", None)
 
 
 def test_directives_xlsx_creates_parent_dir(tmp_path: Path):

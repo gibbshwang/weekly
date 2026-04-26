@@ -59,6 +59,24 @@ def _read_part_workbook(part_xlsx_path: Path) -> Tuple[List[Dict[str, Any]], Lis
     return out["이번주"], out["지난주"]
 
 
+# Columns the part lead is responsible for filling in. assign auto-creates
+# rows with 업무ID + 출처 + 업무_지시내용 + 마감 + 우선순위 populated, but
+# leaves all of these blank — so 미작성 must be defined as "the lead has
+# not touched any user-input column", not just "no rows exist".
+USER_INPUT_HEADERS = (
+    "상태",
+    "이번주_처리결과",
+    "이슈_장애",
+    "리스크_지원요청",
+    "다음액션_차주계획",
+    "비고",
+)
+
+
+def _row_has_user_input(row: Dict[str, Any]) -> bool:
+    return any((row.get(h) or "").strip() for h in USER_INPUT_HEADERS)
+
+
 def collect_parts(week_dir: Path, team) -> Dict[str, Dict[str, Any]]:
     """For each (group, part) in `team`, read its xlsx and return:
 
@@ -67,8 +85,9 @@ def collect_parts(week_dir: Path, team) -> Dict[str, Dict[str, Any]]:
                    "지난주": [row_dict, ...],
                    "미작성": bool}}
 
-    A part is considered 미작성 when its workbook is missing OR both
-    sheets have zero data rows.
+    A part is 미작성 when its workbook is missing OR no row in either sheet
+    has any user-input column populated. Auto-assigned rows that the lead
+    hasn't touched do NOT flip 미작성 to False.
     """
     week_dir = Path(week_dir)
     out: Dict[str, Dict[str, Any]] = {}
@@ -81,11 +100,15 @@ def collect_parts(week_dir: Path, team) -> Dict[str, Dict[str, Any]]:
             }
             continue
         this_week_rows, last_week_rows = _read_part_workbook(path)
+        any_input = any(
+            _row_has_user_input(r)
+            for r in (*this_week_rows, *last_week_rows)
+        )
         out[part.name] = {
             "group": group.name,
             "이번주": this_week_rows,
             "지난주": last_week_rows,
-            "미작성": (not this_week_rows) and (not last_week_rows),
+            "미작성": not any_input,
         }
     return out
 

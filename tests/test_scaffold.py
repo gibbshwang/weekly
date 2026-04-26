@@ -35,9 +35,34 @@ def test_scaffold_creates_expected_files(tmp_path: Path):
     assert (pkg / "storage" / "local.py").exists()
     # _llm.py is copied from scripts/lib/llm_call.py
     assert (pkg / "_llm.py").exists()
+    # xlsx_template.py is copied from scripts/xlsx_template.py — runtime imports
+    # depend on it (prepare/assigner/compiler all use weekly_runtime.xlsx_template).
+    assert (pkg / "xlsx_template.py").exists()
     # Phase 2 templates + prompts
     assert (pkg / "templates" / "template_dashboard_v2.html.j2").exists()
     assert (pkg / "prompts" / "compile_system_v2.txt").exists()
+
+
+def test_scaffold_runtime_can_import_xlsx_template_without_scripts(tmp_path: Path):
+    """Regression: standalone runtime must not fall back to scripts.xlsx_template.
+
+    The runtime modules try `weekly_runtime.xlsx_template` first and fall back
+    to `scripts.xlsx_template` for harness tests. The fallback should NEVER
+    execute in a real scaffolded project — there's no scripts/ folder there.
+    Verify the file is present so the primary import succeeds.
+    """
+    target = tmp_path / "weekly_test"
+    scaffold_project(
+        target=target, team_slug="x", team_name="x",
+        bundle_root=BUNDLE_ROOT, install_pkg=False,
+    )
+    xlsx_path = target / "weekly_runtime" / "xlsx_template.py"
+    assert xlsx_path.exists(), "xlsx_template.py missing — runtime ImportError"
+    text = xlsx_path.read_text(encoding="utf-8")
+    # Sanity: it's the right module (Phase 2 generators present)
+    assert "PART_SHEET_HEADERS" in text
+    assert "generate_part_xlsx" in text
+    assert "generate_directives_xlsx" in text
 
 
 def test_scaffold_renders_team_vars(tmp_path: Path):
