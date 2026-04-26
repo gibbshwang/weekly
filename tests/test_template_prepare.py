@@ -128,6 +128,43 @@ def test_prepare_first_week_carry_forward_is_empty(tmp_path: Path):
         assert last.max_row == 1
 
 
+def test_prepare_carry_forward_neutralizes_formula_in_free_text(tmp_path: Path):
+    """Regression: when carry-forward copies an incomplete row from prev week
+    to the new week's 지난주 sheet, free-text fields like 비고 / 이슈_장애 must
+    be sanitized so a malicious or accidental `=...` value doesn't auto-evaluate
+    in the next week's workbook."""
+    prep = _load_prepare(tmp_path)
+    team = _team()
+    storage_root = tmp_path / "store"
+
+    _seed_prev_week_part(
+        storage_root, team.name, "2026-W17",
+        group_name="사업그룹", part_name="전략기획",
+        rows_이번주=[
+            {
+                "업무ID": "W17-099", "출처": "지시사항",
+                "업무_지시내용": "=HYPERLINK(\"https://evil/\",\"x\")",
+                "상태": "진행중",
+                "이슈_장애": "+계산식()",
+                "비고": "@cmd",
+                "마감": "2026-04-30", "우선순위": "높음",
+            },
+        ],
+    )
+    prep.prepare_new_week(
+        storage_root=storage_root, team=team,
+        current_week="2026-W18", prev_week="2026-W17",
+    )
+    new_xlsx = storage_root / team.name / "2026-W18" / "전략기획.xlsx"
+    wb = load_workbook(new_xlsx)
+    last = wb["지난주"]
+    row = next(last.iter_rows(min_row=2, values_only=True))
+    by_header = dict(zip(PART_SHEET_HEADERS, row))
+    assert by_header["업무_지시내용"].startswith("'=HYPERLINK"), by_header["업무_지시내용"]
+    assert by_header["이슈_장애"].startswith("'+"), by_header["이슈_장애"]
+    assert by_header["비고"].startswith("'@"), by_header["비고"]
+
+
 def test_prepare_carries_forward_incomplete_rows(tmp_path: Path):
     """Rows whose 상태 ∉ {완료, 취소} land in the new week's 지난주 sheet,
     with 출처 rewritten to "이월" and 업무ID preserved."""

@@ -53,6 +53,29 @@ def _inline_list(values: List[str]) -> str:
     return '"' + ",".join(values) + '"'
 
 
+# Excel interprets a cell starting with `=`, `+`, `-`, `@` as a formula at
+# open time (CSV injection / formula injection). Tab/CR/LF leads can also
+# trigger unintended evaluation in some apps. Prefix `'` neutralizes — the
+# apostrophe is consumed by Excel and the cell renders as the literal text.
+_DANGEROUS_LEADING_CHARS = ("=", "+", "-", "@", "\t", "\r", "\n")
+
+
+def safe_excel_text(value) -> str:
+    """Sanitize a free-text value for an Excel cell.
+
+    Apply at every write surface where content originated from operator
+    free-text input (지시내용, 비고, lead-input columns). Idempotent — values
+    already prefixed with `'` will get a second prefix (acceptable: still
+    renders correctly, just slightly redundant). Pass dropdown-controlled
+    or system-generated values (업무ID, 출처, 상태, 우선순위) through
+    unchanged — they cannot start with the dangerous chars.
+    """
+    s = "" if value is None else str(value)
+    if s.startswith(_DANGEROUS_LEADING_CHARS):
+        return "'" + s
+    return s
+
+
 def generate_directives_xlsx(out_path: Path, team) -> None:
     """Phase 2 _지시사항.xlsx — 6 columns, 담당파트 dropdown only.
 

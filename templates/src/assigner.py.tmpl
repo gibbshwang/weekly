@@ -22,10 +22,10 @@ from jinja2 import Template
 
 try:
     from openpyxl import load_workbook
-    from weekly_runtime.xlsx_template import PART_SHEET_HEADERS
+    from weekly_runtime.xlsx_template import PART_SHEET_HEADERS, safe_excel_text
 except ImportError:  # pragma: no cover — exercised by harness tests
     from openpyxl import load_workbook
-    from scripts.xlsx_template import PART_SHEET_HEADERS
+    from scripts.xlsx_template import PART_SHEET_HEADERS, safe_excel_text
 
 
 _TASK_ID_RE = re.compile(r"^W(\d{1,2})-(\d{3})$")
@@ -247,7 +247,10 @@ def append_to_part_xlsx(
         "우선순위": row.get("우선순위", ""),
         "비고": row.get("비고", ""),
     }
-    ws.append([payload.get(h, "") for h in PART_SHEET_HEADERS])
+    # safe_excel_text neutralizes formula/CSV-injection leading chars in
+    # free-text values copied from _지시사항.xlsx (지시내용, 비고, 마감).
+    # System-generated columns (업무ID/출처/dropdowns) pass through unchanged.
+    ws.append([safe_excel_text(payload.get(h, "")) for h in PART_SHEET_HEADERS])
     wb.save(part_xlsx_path)
 
 

@@ -185,3 +185,34 @@ def test_part_xlsx_active_sheet_is_이번주(tmp_path: Path):
     generate_part_xlsx(out_path=out, team_name="기획팀", group_name="사업그룹", part_name="전략기획", week="2026-W18")
     wb = load_workbook(out)
     assert wb.active.title == "이번주"
+
+
+# --- safe_excel_text (formula injection / CSV injection sanitizer) ---
+
+
+def test_safe_excel_text_passes_normal_values_unchanged():
+    from scripts.xlsx_template import safe_excel_text
+    assert safe_excel_text("일반 텍스트") == "일반 텍스트"
+    assert safe_excel_text("2026-04-30") == "2026-04-30"
+    assert safe_excel_text("") == ""
+    assert safe_excel_text(None) == ""
+    assert safe_excel_text(42) == "42"   # integers stringified
+
+
+def test_safe_excel_text_neutralizes_formula_leading_chars():
+    """Excel interprets =/+/-/@ as formula triggers. Prefix `'` so the
+    cell renders as plain text."""
+    from scripts.xlsx_template import safe_excel_text
+    assert safe_excel_text("=HYPERLINK(\"x\",\"y\")") == "'=HYPERLINK(\"x\",\"y\")"
+    assert safe_excel_text("+SUM(1+1)") == "'+SUM(1+1)"
+    assert safe_excel_text("-2+3") == "'-2+3"
+    assert safe_excel_text("@cmd") == "'@cmd"
+
+
+def test_safe_excel_text_neutralizes_control_leading_chars():
+    """Tab/CR/LF leading chars can also trigger unintended evaluation
+    in some spreadsheet apps."""
+    from scripts.xlsx_template import safe_excel_text
+    assert safe_excel_text("\tinjected") == "'\tinjected"
+    assert safe_excel_text("\rinjected") == "'\rinjected"
+    assert safe_excel_text("\ninjected") == "'\ninjected"

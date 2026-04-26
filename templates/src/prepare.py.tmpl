@@ -31,11 +31,13 @@ try:
     from weekly_runtime.xlsx_template import (
         generate_part_xlsx,
         PART_SHEET_HEADERS,
+        safe_excel_text,
     )
 except ImportError:  # pragma: no cover — exercised by harness tests
     from scripts.xlsx_template import (
         generate_part_xlsx,
         PART_SHEET_HEADERS,
+        safe_excel_text,
     )
 
 
@@ -79,11 +81,16 @@ def _existing_ids(ws) -> set:
 
 def _append_rows(ws, rows: Iterable[dict], header_overrides: Optional[dict] = None) -> None:
     """Append dict-shaped rows to a sheet, with optional per-row header overrides
-    (e.g., set 출처 to '이월' on every carry-forward row)."""
+    (e.g., set 출처 to '이월' on every carry-forward row).
+
+    safe_excel_text neutralizes formula/CSV-injection leading chars (=/+/-/@)
+    in any cell — protects free-text columns (지시내용/비고/이슈/리스크/액션)
+    that originated from operator input. Idempotent on system-controlled values.
+    """
     overrides = header_overrides or {}
     for r in rows:
         merged = {**r, **overrides}
-        ws.append([merged.get(h, "") for h in PART_SHEET_HEADERS])
+        ws.append([safe_excel_text(merged.get(h, "")) for h in PART_SHEET_HEADERS])
 
 
 def _delete_data_rows(ws) -> None:
