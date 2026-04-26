@@ -30,9 +30,31 @@ except ImportError:  # pragma: no cover — exercised by harness tests
 
 _TASK_ID_RE = re.compile(r"^W(\d{1,2})-(\d{3})$")
 
+# Fields that participate in the instruction's *identity*. 비고 is intentionally
+# excluded — the operator may annotate a row freely after assignment without
+# triggering a new task ID. Hard cutover from the legacy row_index/row_hash
+# scheme: state files written by older versions will look like an empty state
+# (no `instructions` key) and every row will be re-processed once.
+_INSTRUCTION_KEY_FIELDS = ("일자", "지시내용", "담당파트", "마감", "우선순위")
 
-def _row_hash(row: Dict[str, Any]) -> str:
-    canonical = json.dumps(row, sort_keys=True, ensure_ascii=False)
+
+def _instruction_key(row: Dict[str, Any]) -> str:
+    """Position-independent fingerprint of an instruction.
+
+    Hashes a normalized projection of the identity-bearing fields so:
+    - Reordering / inserting rows in the directives xlsx does not flip identity
+    - Editing 비고 (operator commentary) does not flip identity
+    - Editing 지시내용 etc. *does* flip identity (treated as a new instruction)
+    """
+    canonical = json.dumps(
+        {
+            field: (row.get(field) or "").strip() if isinstance(row.get(field), str)
+                   else (row.get(field) or "")
+            for field in _INSTRUCTION_KEY_FIELDS
+        },
+        sort_keys=True,
+        ensure_ascii=False,
+    )
     return "sha256:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
@@ -46,36 +68,34 @@ def _strip_code_fence(text: str) -> str:
     return text.strip()
 
 
-def diff_rows(rows: List[Dict[str, Any]], state_path: Path) -> Tuple[List[int], List[int]]:
-    """Compare rows to last-known state. Returns (new_indices, modified_indices)."""
+def diff_rows(rows: List[Dict[str, Any]], state_path: Path) -> List[int]:
+    """Return indices of rows whose instruction_key has not been processed yet.
+
+    Order-independent — sorting / inserting rows in the directives xlsx will
+    not re-classify already-assigned content.
+    """
     state_path = Path(state_path)
     if not state_path.exists():
-        return list(range(len(rows))), []
+        return list(range(len(rows)))
     state = json.loads(state_path.read_text(encoding="utf-8"))
-    known = {entry["row_index"]: entry["row_hash"] for entry in state.get("rows", [])}
-    new_idx, mod_idx = [], []
-    for i, row in enumerate(rows):
-        h = _row_hash(row)
-        if i not in known:
-            new_idx.append(i)
-        elif known[i] != h:
-            mod_idx.append(i)
-    return new_idx, mod_idx
+    known = {entry["instruction_key"] for entry in state.get("instructions", [])}
+    return [i for i, row in enumerate(rows) if _instruction_key(row) not in known]
 
 
 def update_state(state_path: Path, rows: List[Dict[str, Any]],
                  entries: List[Tuple[int, str, str]]) -> None:
-    """Persist processed-row state.
+    """Persist processed-instruction state.
 
-    `entries` is List[(row_index, assigned_part, method)].
+    `entries` is List[(row_index, assigned_part, method)] — the row_index
+    is used only to look up the current row content for fingerprinting; it
+    is not stored in the state file (that's the whole point of Todo 2).
     """
     state_path = Path(state_path)
     state_path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
-        "rows": [
+        "instructions": [
             {
-                "row_index": idx,
-                "row_hash": _row_hash(rows[idx]),
+                "instruction_key": _instruction_key(rows[idx]),
                 "assigned_to": part,
                 "method": method,
             }
@@ -85,18 +105,22 @@ def update_state(state_path: Path, rows: List[Dict[str, Any]],
     state_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def _carry_forward_state(state_path: Path, rows: List[Dict[str, Any]],
-                         skip_indices) -> List[Tuple[int, str, str]]:
-    """Return state entries for rows we are NOT re-processing this tick."""
+def _carry_forward_state(state_path: Path) -> List[Dict[str, str]]:
+    """Return all existing state entries unchanged.
+
+    With the fingerprint scheme `diff_rows` already excludes any row whose
+    key is in state, so every existing entry is safe to preserve verbatim.
+    """
     state_path = Path(state_path)
     if not state_path.exists():
         return []
-    existing = json.loads(state_path.read_text(encoding="utf-8")).get("rows", [])
-    out = []
-    for entry in existing:
-        if entry["row_index"] not in skip_indices and entry["row_index"] < len(rows):
-            out.append((entry["row_index"], entry["assigned_to"], entry["method"]))
-    return out
+    existing = json.loads(state_path.read_text(encoding="utf-8")).get("instructions", [])
+    return [
+        {"instruction_key": e["instruction_key"],
+         "assigned_to": e["assigned_to"],
+         "method": e["method"]}
+        for e in existing
+    ]
 
 
 def generate_task_id(week: str, seq: int) -> str:
@@ -239,19 +263,21 @@ def run_assign(
     """Run a single assign tick.
 
     Returns `{part_name: [task_id, ...]}` of parts touched this tick.
-    Carries forward state for unchanged rows so cron reruns are idempotent.
+    Idempotent on instruction_key: re-running with the same rows yields no
+    new appends.
     """
-    new_idx, mod_idx = diff_rows(rows, state_path)
-    if not (new_idx or mod_idx):
+    new_idx = diff_rows(rows, state_path)
+    if not new_idx:
         return {}
 
     seq = next_seq_for_week(part_xlsx_dir, team, week)
-
     affected: Dict[str, List[str]] = {}
-    skip = set(new_idx + mod_idx)
-    entries = list(_carry_forward_state(state_path, rows, skip))
+    # All previously-processed instructions remain in state. diff_rows
+    # already excluded their keys from new_idx, so nothing is reprocessed.
+    carried = _carry_forward_state(state_path)
+    new_entries: List[Tuple[int, str, str]] = []
 
-    for idx in sorted(new_idx + mod_idx):
+    for idx in sorted(new_idx):
         row = rows[idx]
         group, part, method = resolve_target_part(
             row, team=team, llm=llm, prompt_template_path=prompt_template_path,
@@ -263,7 +289,21 @@ def run_assign(
             task_id=task_id, row=row, source="지시사항",
         )
         affected.setdefault(part.name, []).append(task_id)
-        entries.append((idx, part.name, method))
+        new_entries.append((idx, part.name, method))
 
-    update_state(state_path, rows, entries)
+    # Persist carried-forward + newly-assigned. We rebuild the state file in
+    # one shot — the new payload is the union of both.
+    state_path = Path(state_path)
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "instructions": [
+            *carried,
+            *[
+                {"instruction_key": _instruction_key(rows[idx]),
+                 "assigned_to": part, "method": method}
+                for idx, part, method in new_entries
+            ],
+        ]
+    }
+    state_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     return affected

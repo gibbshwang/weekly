@@ -75,43 +75,135 @@ def _create_week_workbooks(week_dir: Path, team) -> None:
         )
 
 
-# --- diff_rows + state plumbing (shared with the legacy form, retained) ---
+# --- instruction_key + diff_rows + state plumbing (Todo 2: content fingerprint) ---
 
 
-def test_diff_rows_detects_new(tmp_path: Path):
+def test_instruction_key_is_position_independent(tmp_path: Path):
+    """Same content at different row positions yields the same key — that's
+    the whole point of the fingerprint vs row_index migration."""
+    a = _load_assigner(tmp_path)
+    row = {"일자": "2026-04-22", "지시내용": "x", "담당파트": "전략기획",
+           "우선순위": "높음", "마감": "2026-04-30", "비고": "anything"}
+    assert a._instruction_key(row) == a._instruction_key(dict(row))
+
+
+def test_instruction_key_changes_when_지시내용_changes(tmp_path: Path):
+    a = _load_assigner(tmp_path)
+    base = {"일자": "2026-04-22", "지시내용": "원본", "담당파트": "전략기획",
+            "우선순위": "높음", "마감": "2026-04-30"}
+    edited = {**base, "지시내용": "수정됨"}
+    assert a._instruction_key(base) != a._instruction_key(edited)
+
+
+def test_instruction_key_ignores_비고(tmp_path: Path):
+    """비고 is operator commentary, not part of the instruction identity.
+    Editing 비고 must NOT trigger re-assignment."""
+    a = _load_assigner(tmp_path)
+    base = {"일자": "2026-04-22", "지시내용": "x", "담당파트": "전략기획",
+            "우선순위": "높음", "마감": "2026-04-30", "비고": ""}
+    note_added = {**base, "비고": "임원 보고용"}
+    assert a._instruction_key(base) == a._instruction_key(note_added)
+
+
+def test_instruction_key_normalizes_whitespace(tmp_path: Path):
+    """Trailing/leading ws on operator-edited cells should not flip identity."""
+    a = _load_assigner(tmp_path)
+    a_row = {"일자": "2026-04-22", "지시내용": "x", "담당파트": "전략기획",
+             "우선순위": "높음", "마감": "2026-04-30"}
+    b_row = {"일자": "2026-04-22 ", "지시내용": " x ", "담당파트": "전략기획",
+             "우선순위": "높음", "마감": "  2026-04-30"}
+    assert a._instruction_key(a_row) == a._instruction_key(b_row)
+
+
+def test_diff_rows_returns_indices_of_unseen_keys(tmp_path: Path):
+    """Empty state → all rows are new."""
     a = _load_assigner(tmp_path)
     rows = [
-        {"일자": "2026-04-22", "지시내용": "x", "담당그룹": "사업그룹", "담당파트": "전략기획",
+        {"일자": "2026-04-22", "지시내용": "x", "담당파트": "전략기획",
          "우선순위": "높음", "마감": "2026-04-30", "비고": ""},
     ]
-    new_rows, modified_rows = a.diff_rows(rows, _state_path(tmp_path))
-    assert new_rows == [0]
-    assert modified_rows == []
+    assert a.diff_rows(rows, _state_path(tmp_path)) == [0]
 
 
-def test_diff_rows_no_change_when_state_matches(tmp_path: Path):
+def test_diff_rows_skips_known_keys(tmp_path: Path):
     a = _load_assigner(tmp_path)
     sp = _state_path(tmp_path)
     rows = [
-        {"일자": "2026-04-22", "지시내용": "x", "담당그룹": "사업그룹", "담당파트": "전략기획",
+        {"일자": "2026-04-22", "지시내용": "x", "담당파트": "전략기획",
          "우선순위": "높음", "마감": "2026-04-30", "비고": ""},
     ]
     a.update_state(sp, rows, [(0, "전략기획", "column")])
-    assert a.diff_rows(rows, sp) == ([], [])
+    assert a.diff_rows(rows, sp) == []
 
 
-def test_diff_rows_detects_modified(tmp_path: Path):
+def test_diff_rows_resilient_to_row_reorder(tmp_path: Path):
+    """Re-sorting the directives xlsx must NOT cause re-assignment.
+    This is the core bug Todo 2 is fixing."""
     a = _load_assigner(tmp_path)
     sp = _state_path(tmp_path)
     rows_v1 = [
-        {"일자": "2026-04-22", "지시내용": "원본", "담당그룹": "사업그룹", "담당파트": "전략기획",
+        {"일자": "2026-04-22", "지시내용": "first", "담당파트": "전략기획",
+         "우선순위": "높음", "마감": "2026-04-30", "비고": ""},
+        {"일자": "2026-04-23", "지시내용": "second", "담당파트": "사업개발",
+         "우선순위": "보통", "마감": "2026-05-02", "비고": ""},
+    ]
+    a.update_state(sp, rows_v1, [(0, "전략기획", "column"), (1, "사업개발", "column")])
+    # Sorted/swapped — same content, different positions
+    rows_v2 = [rows_v1[1], rows_v1[0]]
+    assert a.diff_rows(rows_v2, sp) == []
+
+
+def test_diff_rows_resilient_to_row_insertion(tmp_path: Path):
+    """Inserting a new row at the top must NOT re-classify rows below it."""
+    a = _load_assigner(tmp_path)
+    sp = _state_path(tmp_path)
+    rows_v1 = [
+        {"일자": "2026-04-22", "지시내용": "old1", "담당파트": "전략기획",
+         "우선순위": "높음", "마감": "2026-04-30", "비고": ""},
+    ]
+    a.update_state(sp, rows_v1, [(0, "전략기획", "column")])
+    rows_v2 = [
+        {"일자": "2026-04-21", "지시내용": "NEW", "담당파트": "전략기획",
+         "우선순위": "보통", "마감": "2026-04-29", "비고": ""},
+        rows_v1[0],   # original — now at index 1
+    ]
+    new = a.diff_rows(rows_v2, sp)
+    assert new == [0]   # only the new top row, NOT the shifted original
+
+
+def test_diff_rows_treats_content_edit_as_new(tmp_path: Path):
+    """If the operator edits 지시내용 in place, the new content has a new
+    instruction_key, so it's treated as a new instruction (and gets a new
+    task ID). The old key remains in state — out of scope for this PR
+    (operator workflow expects edits to be rare)."""
+    a = _load_assigner(tmp_path)
+    sp = _state_path(tmp_path)
+    rows_v1 = [
+        {"일자": "2026-04-22", "지시내용": "원본", "담당파트": "전략기획",
          "우선순위": "높음", "마감": "2026-04-30", "비고": ""},
     ]
     a.update_state(sp, rows_v1, [(0, "전략기획", "column")])
     rows_v2 = [{**rows_v1[0], "지시내용": "수정됨"}]
-    new_rows, modified_rows = a.diff_rows(rows_v2, sp)
-    assert new_rows == []
-    assert modified_rows == [0]
+    assert a.diff_rows(rows_v2, sp) == [0]
+
+
+def test_state_uses_instructions_schema(tmp_path: Path):
+    """State on disk must have an `instructions` array (new schema), not
+    the legacy `rows` array."""
+    a = _load_assigner(tmp_path)
+    sp = _state_path(tmp_path)
+    rows = [
+        {"일자": "2026-04-22", "지시내용": "x", "담당파트": "전략기획",
+         "우선순위": "높음", "마감": "2026-04-30", "비고": ""},
+    ]
+    a.update_state(sp, rows, [(0, "전략기획", "column")])
+    payload = json.loads(sp.read_text(encoding="utf-8"))
+    assert "instructions" in payload
+    assert "rows" not in payload   # legacy schema fully removed
+    e0 = payload["instructions"][0]
+    assert "instruction_key" in e0
+    assert e0["assigned_to"] == "전략기획"
+    assert e0["method"] == "column"
 
 
 # --- generate_task_id + next_seq_for_week ---
