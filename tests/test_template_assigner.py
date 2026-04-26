@@ -35,6 +35,7 @@ def _state_path(tmp_path: Path) -> Path:
 @dataclass
 class _StubPart:
     name: str
+    role: "str | None" = None
 
 
 @dataclass
@@ -220,6 +221,74 @@ def test_resolve_target_part_handles_codex_code_fence(tmp_path: Path):
         row, team=_team(), llm=fake_llm, prompt_template_path=PROMPT_PATH,
     )
     assert part.name == "전략기획"
+
+
+# --- Part.role propagation into LLM prompt (Todo 1: role 마스터) ---
+
+
+def _team_with_roles():
+    return _StubTeam(
+        name="기획팀",
+        groups=[
+            _StubGroup("사업그룹", [
+                _StubPart("전략기획", role="중장기 전략, 시장 분석, 경쟁사 조사"),
+                _StubPart("사업개발", role="고객사 미팅, 신규 사업 발굴"),
+            ]),
+            _StubGroup("운영그룹", [
+                _StubPart("운영관리"),  # role intentionally omitted
+            ]),
+        ],
+    )
+
+
+def test_resolve_target_part_includes_part_role_in_prompt(tmp_path: Path):
+    """When parts have `role` set, the LLM system prompt must surface them so
+    the model can reason about which part owns the instruction."""
+    a = _load_assigner(tmp_path)
+    fake_llm = MagicMock()
+    fake_llm.call.return_value = json.dumps({
+        "추정_담당파트": "사업개발", "확신도": 0.9, "근거": "고객사 키워드"
+    }, ensure_ascii=False)
+    team = _team_with_roles()
+    row = {"일자": "x", "지시내용": "고객사 미팅", "담당그룹": "",
+           "담당파트": "", "우선순위": "x", "마감": "x", "비고": ""}
+    a.resolve_target_part(
+        row, team=team, llm=fake_llm, prompt_template_path=PROMPT_PATH,
+    )
+    sys_prompt = fake_llm.call.call_args[0][0]
+    assert "전략기획" in sys_prompt
+    assert "중장기 전략, 시장 분석, 경쟁사 조사" in sys_prompt
+    assert "사업개발" in sys_prompt
+    assert "고객사 미팅, 신규 사업 발굴" in sys_prompt
+
+
+def test_resolve_target_part_handles_parts_without_role(tmp_path: Path):
+    """A part with role=None must still appear in the prompt, and each part
+    should be on its own line so a role-less part is unambiguously identifiable
+    (no role descriptor appended)."""
+    a = _load_assigner(tmp_path)
+    fake_llm = MagicMock()
+    fake_llm.call.return_value = json.dumps({
+        "추정_담당파트": "운영관리", "확신도": 0.6, "근거": "운영 키워드"
+    }, ensure_ascii=False)
+    team = _team_with_roles()
+    row = {"일자": "x", "지시내용": "운영 점검", "담당그룹": "",
+           "담당파트": "", "우선순위": "x", "마감": "x", "비고": ""}
+    a.resolve_target_part(
+        row, team=team, llm=fake_llm, prompt_template_path=PROMPT_PATH,
+    )
+    sys_prompt = fake_llm.call.call_args[0][0]
+    # 운영관리 must be on its own line (proves per-part rendering, not the
+    # legacy one-line "파트 목록: a, b, c" format).
+    lines = sys_prompt.splitlines()
+    운영_only_lines = [l for l in lines if "운영관리" in l and "전략기획" not in l and "사업개발" not in l]
+    assert len(운영_only_lines) == 1, (
+        f"운영관리 should appear on its own per-part line, found: {운영_only_lines!r}"
+    )
+    # And that line must NOT carry a role descriptor (role=None for this part).
+    assert "—" not in 운영_only_lines[0], (
+        "role-less part must not get a role descriptor"
+    )
 
 
 # --- append_to_part_xlsx ---

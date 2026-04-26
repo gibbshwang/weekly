@@ -177,9 +177,12 @@ def resolve_target_part(row: Dict[str, Any], team, llm, prompt_template_path: Pa
     if p is not None:
         return g, p, "column"
 
-    parts_flat = [p.name for _, p in team.iter_parts()]
+    parts_with_role = [
+        {"name": p.name, "role": p.role}
+        for _, p in team.iter_parts()
+    ]
     sys_prompt = Template(Path(prompt_template_path).read_text(encoding="utf-8")).render(
-        dept_name=team.name, parts=parts_flat,
+        dept_name=team.name, parts=parts_with_role,
     )
     user_payload = {k: row.get(k, "") for k in
                     ["일자", "지시내용", "우선순위", "마감", "비고"]}

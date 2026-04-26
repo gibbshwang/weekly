@@ -41,11 +41,26 @@ class Person(BaseModel):
 class Part(BaseModel):
     name: str
     lead: Person
+    # Optional free-text description of what this part is responsible for.
+    # When set, assign feeds it into the LLM prompt to improve target-part
+    # inference. When unset (or blank), the assigner falls back to keyword
+    # matching against the part name.
+    role: Optional[str] = None
 
     @field_validator("name")
     @classmethod
     def _check_name(cls, v: str) -> str:
         return _validate_safe_name(v, "team.groups[].parts[].name")
+
+    @field_validator("role", mode="before")
+    @classmethod
+    def _normalize_role(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        if not isinstance(v, str):
+            raise ValueError("team.groups[].parts[].role must be a string when set")
+        stripped = v.strip()
+        return stripped or None
 
 
 class Group(BaseModel):

@@ -9,7 +9,7 @@ Phase 2: 3-level org wizard (Team → Group → Part). The legacy single-level
 collect_scope was removed in the Wave E cleanup.
 """
 from dataclasses import dataclass, field
-from typing import List
+from typing import List, Optional
 
 
 @dataclass
@@ -17,6 +17,10 @@ class PartScopeAnswer:
     name: str
     lead_name: str
     lead_email: str
+    # Optional free-text role description ("로그인, OAuth, 토큰 관리").
+    # Set by the wizard via per-part prompt; persisted to config.yaml so
+    # the assigner LLM can do role-based reasoning. None when skipped.
+    role: Optional[str] = None
 
 
 @dataclass
@@ -75,10 +79,19 @@ def _collect_group(group_index: int) -> GroupScopeAnswer:
         raise ValueError(
             f"그룹 {group_index} ({g_name!r})의 파트장 이름/이메일 수가 파트 수와 일치하지 않습니다."
         )
-    parts_struct = [
-        PartScopeAnswer(name=parts[i], lead_name=pl_names[i], lead_email=pl_emails[i])
-        for i in range(len(parts))
-    ]
+    # Per-part role prompt — asked individually (not csv) because role text
+    # naturally contains commas (e.g. "로그인, OAuth, 토큰 관리"). Empty input
+    # means "no role description" → role=None → assign falls back to keyword.
+    parts_struct = []
+    for i in range(len(parts)):
+        role_raw = _prompt(
+            f"  그룹 {group_index} — {parts[i]} 역할 (선택, Enter로 스킵)"
+        )
+        role = role_raw.strip() or None
+        parts_struct.append(PartScopeAnswer(
+            name=parts[i], lead_name=pl_names[i], lead_email=pl_emails[i],
+            role=role,
+        ))
     return GroupScopeAnswer(
         name=g_name, lead_name=g_lead_name, lead_email=g_lead_email, parts=parts_struct,
     )

@@ -13,7 +13,8 @@ team:
           lead:
             name: "{{ p.lead_name }}"
             email: "{{ p.lead_email }}"
-{% endfor %}{% endfor %}
+{% if p.role %}          role: {{ p.role | tojson }}
+{% endif %}{% endfor %}{% endfor %}
 storage:
   type: "{{ storage_type }}"
   root: {{ storage_root | tojson }}

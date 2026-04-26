@@ -266,3 +266,84 @@ def test_load_config_rejects_legacy_department_form(tmp_path: Path):
     }, allow_unicode=True), encoding="utf-8")
     with pytest.raises(Exception):
         mod.load_config(yaml_path)
+
+
+# --- Part.role (Todo 1: role 마스터, optional field) ---
+
+
+def test_part_role_defaults_to_none_when_omitted(tmp_path: Path):
+    """Existing configs without `role` must continue to load (backward compat)."""
+    mod = _load_config_module(tmp_path)
+    yaml_path = _build_team_yaml(tmp_path, {
+        "name": "기획팀",
+        "lead": {"name": "x", "email": "x@x.com"},
+        "groups": [{
+            "name": "g1",
+            "lead": {"name": "x", "email": "x@x.com"},
+            "parts": [{"name": "p1", "lead": {"name": "x", "email": "x@x.com"}}],
+        }],
+    })
+    cfg = mod.load_config(yaml_path)
+    assert cfg.team.groups[0].parts[0].role is None
+
+
+def test_part_role_loads_when_provided(tmp_path: Path):
+    """When `role` is set, it must be available on the loaded Part."""
+    mod = _load_config_module(tmp_path)
+    yaml_path = _build_team_yaml(tmp_path, {
+        "name": "기획팀",
+        "lead": {"name": "x", "email": "x@x.com"},
+        "groups": [{
+            "name": "g1",
+            "lead": {"name": "x", "email": "x@x.com"},
+            "parts": [{
+                "name": "p1",
+                "lead": {"name": "x", "email": "x@x.com"},
+                "role": "로그인, OAuth, 토큰 관리",
+            }],
+        }],
+    })
+    cfg = mod.load_config(yaml_path)
+    assert cfg.team.groups[0].parts[0].role == "로그인, OAuth, 토큰 관리"
+
+
+def test_part_role_strips_surrounding_whitespace(tmp_path: Path):
+    """Wizard input and YAML hand-edits often have trailing whitespace.
+    Normalize at the model boundary so downstream prompt assembly stays clean."""
+    mod = _load_config_module(tmp_path)
+    yaml_path = _build_team_yaml(tmp_path, {
+        "name": "기획팀",
+        "lead": {"name": "x", "email": "x@x.com"},
+        "groups": [{
+            "name": "g1",
+            "lead": {"name": "x", "email": "x@x.com"},
+            "parts": [{
+                "name": "p1",
+                "lead": {"name": "x", "email": "x@x.com"},
+                "role": "  결제, Toss, 환불  ",
+            }],
+        }],
+    })
+    cfg = mod.load_config(yaml_path)
+    assert cfg.team.groups[0].parts[0].role == "결제, Toss, 환불"
+
+
+def test_part_role_blank_string_normalizes_to_none(tmp_path: Path):
+    """An empty/whitespace-only role behaves the same as omission so the
+    wizard's 'press Enter to skip' produces consistent loaded state."""
+    mod = _load_config_module(tmp_path)
+    yaml_path = _build_team_yaml(tmp_path, {
+        "name": "기획팀",
+        "lead": {"name": "x", "email": "x@x.com"},
+        "groups": [{
+            "name": "g1",
+            "lead": {"name": "x", "email": "x@x.com"},
+            "parts": [{
+                "name": "p1",
+                "lead": {"name": "x", "email": "x@x.com"},
+                "role": "   ",
+            }],
+        }],
+    })
+    cfg = mod.load_config(yaml_path)
+    assert cfg.team.groups[0].parts[0].role is None
