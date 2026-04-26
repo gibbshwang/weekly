@@ -48,6 +48,48 @@ def _previous_iso_week() -> str:
     return f"{iso_year}-W{iso_week:02d}"
 
 
+class _LazyLLM:
+    """Defer LLMClient construction (and PATH validation) until first call.
+
+    assign cron runs hourly; many ticks have no new rows, or every new row
+    has 담당파트 pre-filled. In those cases AI is never used, but the eager
+    `get_llm_client()` would still fail with 'codex CLI not found in PATH'
+    if the binary is absent — breaking ticks unnecessarily.
+
+    Behaves like an LLMClient: exposes `.call(system, user)`. Only on the
+    first real call do we materialize the underlying client.
+    """
+
+    def __init__(self, factory):
+        self._factory = factory
+        self._client = None
+
+    def call(self, system: str, user: str) -> str:
+        if self._client is None:
+            self._client = self._factory()
+        return self._client.call(system, user)
+
+
+def _previous_iso_week_for(week: str) -> str:
+    """Return the ISO year-week immediately preceding the given target week.
+
+    Used as the default for `wreport prepare --week=YYYY-Www` when the
+    operator did not pass --prev-week. The previous helper used today's
+    calendar, which produced wrong carry-forward sources for any --week
+    other than the current one (manual backfill, future-week prep, etc.).
+    """
+    import re as _re
+    m = _re.fullmatch(r"(\d{4})-W(\d{1,2})", week.strip())
+    if not m:
+        raise ValueError(
+            f"Invalid ISO week format {week!r}; expected 'YYYY-Www' (e.g. '2026-W18')"
+        )
+    year, wk = int(m.group(1)), int(m.group(2))
+    prev_mon = date.fromisocalendar(year, wk, 1) - timedelta(days=7)
+    iso_year, iso_week, _dow = prev_mon.isocalendar()
+    return f"{iso_year}-W{iso_week:02d}"
+
+
 def _load_cfg(config_path):
     """Resolve config.yaml path (default: ./config.yaml) and load it."""
     return load_config(config_path or Path.cwd() / "config.yaml")
@@ -95,7 +137,7 @@ def prepare_cmd(team: str, config_path: Optional[Path],
     if prev_week_str == "":
         prev_week: Optional[str] = None
     elif prev_week_str is None:
-        prev_week = _previous_iso_week()
+        prev_week = _previous_iso_week_for(week)
     else:
         prev_week = prev_week_str
 
@@ -130,11 +172,20 @@ def assign_cmd(team: str, config_path, week_str) -> None:
         click.echo(f"No instructions xlsx at {xlsx_path}, skipping.", err=True)
         return
     week_dir = storage_root / week
-    state_path = week_dir / "_assignments_state.json"
+    # State lives at TEAM root (not inside week_dir) so the instruction_key
+    # fingerprints persist across weeks. _지시사항.xlsx is long-lived and
+    # operators don't typically clear it between weeks; per-week state would
+    # cause every week to re-assign every still-present directive (and create
+    # duplicates with prepare's carry-forward into 지난주).
+    state_path = storage_root / "_assignments_state.json"
     audit_log = storage_root / "logs" / "audit.jsonl"
 
     rows = read_instructions(xlsx_path)
-    llm = get_llm_client(provider=cfg.ai.provider, model=cfg.ai.model_assign)
+    # Lazy: only realize the AI CLI client (and run its PATH check) on the
+    # first row that actually needs LLM inference (담당파트 empty/invalid).
+    llm = _LazyLLM(
+        lambda: get_llm_client(provider=cfg.ai.provider, model=cfg.ai.model_assign)
+    )
 
     prompt_path = Path(__file__).parent / "prompts" / "assign_system.txt"
     if not prompt_path.exists():
