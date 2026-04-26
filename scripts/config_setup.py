@@ -24,7 +24,13 @@ def write_config(answers: TeamScopeAnswers, target: Path, bundle_root: Path) -> 
                 "lead_name": g.lead_name,
                 "lead_email": g.lead_email,
                 "parts": [
-                    {"name": p.name, "lead_name": p.lead_name, "lead_email": p.lead_email}
+                    {
+                        "name": p.name,
+                        "lead_name": p.lead_name,
+                        "lead_email": p.lead_email,
+                        # `role` may be None — template emits the key only when truthy
+                        "role": p.role,
+                    }
                     for p in g.parts
                 ],
             }

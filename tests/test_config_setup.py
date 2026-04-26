@@ -85,3 +85,64 @@ def test_write_config_yaml_loads_with_pydantic(tmp_path: Path):
     assert len(cfg.team.groups) == 1
     assert cfg.team.groups[0].name == "사업그룹"
     assert [p.name for p in cfg.team.groups[0].parts] == ["전략기획", "사업개발"]
+
+
+# --- Part role round-trip (Todo 1: role 마스터, end-to-end yaml integration) ---
+
+
+def test_write_config_persists_part_role_when_set(tmp_path: Path):
+    """When the wizard captured a role, it must round-trip into config.yaml
+    so the runtime assigner can read it back."""
+    answers = _make_answers(tmp_path)
+    answers.groups[0].parts[0].role = "중장기 전략, 시장 분석"
+    answers.groups[0].parts[1].role = "고객사 미팅, 신규 사업 발굴"
+
+    target = tmp_path / "project"
+    target.mkdir()
+    write_config(answers, target=target, bundle_root=BUNDLE_ROOT)
+
+    data = yaml.safe_load((target / "config.yaml").read_text(encoding="utf-8"))
+    parts = data["team"]["groups"][0]["parts"]
+    assert parts[0]["role"] == "중장기 전략, 시장 분석"
+    assert parts[1]["role"] == "고객사 미팅, 신규 사업 발굴"
+
+
+def test_write_config_omits_role_key_when_none(tmp_path: Path):
+    """A None role must NOT emit a `role: null` key — keep yaml clean for
+    operators who skipped role and reduce diff noise on hand-edits."""
+    answers = _make_answers(tmp_path)
+    # Both roles default to None from _make_answers
+    assert answers.groups[0].parts[0].role is None
+
+    target = tmp_path / "project"
+    target.mkdir()
+    write_config(answers, target=target, bundle_root=BUNDLE_ROOT)
+
+    yaml_text = (target / "config.yaml").read_text(encoding="utf-8")
+    assert "role:" not in yaml_text, (
+        f"role key should not appear when all roles are None; got:\n{yaml_text}"
+    )
+
+
+def test_write_config_role_yaml_loads_with_pydantic(tmp_path: Path):
+    """End-to-end: wizard answer → yaml → Pydantic Part.role attribute."""
+    import importlib.util
+    from scripts.lib.template_render import render_string
+
+    answers = _make_answers(tmp_path)
+    answers.groups[0].parts[0].role = "결제, Toss, 환불"
+
+    target = tmp_path / "project"
+    target.mkdir()
+    write_config(answers, target=target, bundle_root=BUNDLE_ROOT)
+
+    cfg_tmpl_text = (BUNDLE_ROOT / "templates/src/config.py.tmpl").read_text(encoding="utf-8")
+    cfg_py = render_string(cfg_tmpl_text, {})
+    cfg_path = tmp_path / "config_module.py"
+    cfg_path.write_text(cfg_py, encoding="utf-8")
+    spec = importlib.util.spec_from_file_location("cfg_mod_role", cfg_path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    cfg = mod.load_config(target / "config.yaml")
+    assert cfg.team.groups[0].parts[0].role == "결제, Toss, 환불"
+    assert cfg.team.groups[0].parts[1].role is None
