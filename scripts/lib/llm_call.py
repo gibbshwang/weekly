@@ -43,22 +43,25 @@ class LLMClient:
         return self._call_gemini(system, user)
 
     def _call_codex(self, system: str, user: str) -> str:
+        # Prompt is delivered via stdin (not argv) — argv is observable in
+        # `ps aux` / Windows tasklist and EDR captures, so any PII in the
+        # weekly report would otherwise leak there. `codex exec` reads from
+        # stdin when no positional prompt is supplied.
         prompt = self._merge_prompt(system, user)
         cmd = ["codex", "exec"]
         if self.model:
             cmd += ["--model", self.model]
-        cmd.append(prompt)
-        return self._run_cli(cmd, label="codex exec")
+        return self._run_cli(cmd, label="codex exec", stdin=prompt)
 
     def _call_gemini(self, system: str, user: str) -> str:
-        # gemini CLI 0.39.x: `gemini -p "<prompt>"` for non-interactive (headless) mode.
-        # `-m/--model` selects the model. Verified via `gemini --help` (2026-04-25).
+        # gemini CLI 0.39.x reads stdin in headless mode when no `-p` flag is
+        # given. Same rationale as codex: keep prompt body out of argv to
+        # avoid process-listing leaks. `-m/--model` selects the model.
         prompt = self._merge_prompt(system, user)
         cmd = ["gemini"]
         if self.model:
             cmd += ["-m", self.model]
-        cmd += ["-p", prompt]
-        return self._run_cli(cmd, label="gemini")
+        return self._run_cli(cmd, label="gemini", stdin=prompt)
 
     @staticmethod
     def _merge_prompt(system: str, user: str) -> str:
@@ -69,10 +72,11 @@ class LLMClient:
         )
 
     @staticmethod
-    def _run_cli(cmd: list[str], label: str) -> str:
+    def _run_cli(cmd: list[str], label: str, stdin: str | None = None) -> str:
         try:
             result = subprocess.run(
                 cmd,
+                input=stdin,
                 capture_output=True,
                 text=True,
                 encoding="utf-8",
