@@ -11,19 +11,18 @@ from typing import Any, Dict, List
 from openpyxl import load_workbook
 
 EXPECTED_HEADERS = [
-    "일자", "지시내용", "담당그룹", "담당파트", "우선순위", "마감", "비고",
+    "일자", "지시내용", "담당파트", "우선순위", "마감", "비고",
 ]
 
 
 def read_instructions(xlsx_path: Path) -> List[Dict[str, Any]]:
     """Read the active sheet of `_지시사항.xlsx`, return list of dicts.
 
-    The active sheet must have headers matching EXPECTED_HEADERS in row 1
-    (강제 — stale 6-col files are rejected at load time so a downstream
-    consumer can't silently see fewer fields than it expected).
+    The active sheet must have headers matching EXPECTED_HEADERS in row 1.
 
-    The 담당그룹 column is informational; the assigner uses 담당파트 for
-    the deterministic match and falls back to the LLM if blank.
+    Per direct-instructor UX: 6 columns only. 담당그룹은 묻지 않는다 — assigner
+    가 담당파트 → team.iter_parts()로 그룹을 역산한다. 담당파트가 비어 있으면
+    LLM이 추정한다.
 
     Empty cells become "".
     """

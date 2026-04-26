@@ -165,7 +165,8 @@ def resolve_target_part(row: Dict[str, Any], team, llm, prompt_template_path: Pa
     Returns (group, part, method) where method ∈ {"column", "ai_inferred"}.
 
     1. If 담당파트 is filled and matches a part in `team` → use it
-       (grouping is derived from team membership, even if 담당그룹 was wrong).
+       (grouping is derived from team membership; 담당그룹 is not asked of
+       the instructor and the assigner reconstructs it from team layout).
     2. Else hand off to the LLM with the flat parts list. The LLM picks a
        part name; we look it up in the team to recover its group.
     3. If the LLM picks an invalid part, fall back to the first part of the
@@ -181,7 +182,7 @@ def resolve_target_part(row: Dict[str, Any], team, llm, prompt_template_path: Pa
         dept_name=team.name, parts=parts_flat,
     )
     user_payload = {k: row.get(k, "") for k in
-                    ["일자", "지시내용", "담당그룹", "우선순위", "마감", "비고"]}
+                    ["일자", "지시내용", "우선순위", "마감", "비고"]}
     raw = llm.call(sys_prompt, json.dumps(user_payload, ensure_ascii=False))
     decision = json.loads(_strip_code_fence(raw))
     inferred = decision.get("추정_담당파트", "")

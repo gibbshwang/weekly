@@ -19,8 +19,10 @@ from openpyxl.worksheet.datavalidation import DataValidation
 
 PRIORITIES = ["높음", "보통", "낮음"]
 
+# Per direct-instructor UX agreement: keep 지시사항 minimal.
+# 담당그룹은 시스템이 담당파트로부터 역산 (config validator가 part name unique 보장).
 DIRECTIVES_HEADERS = [
-    "일자", "지시내용", "담당그룹", "담당파트", "우선순위", "마감", "비고",
+    "일자", "지시내용", "담당파트", "우선순위", "마감", "비고",
 ]
 
 PART_SHEET_HEADERS = [
@@ -49,46 +51,41 @@ def _inline_list(values: List[str]) -> str:
 
 
 def generate_directives_xlsx(out_path: Path, team) -> None:
-    """Phase 2 _지시사항.xlsx with both 담당그룹 and 담당파트 dropdowns.
+    """Phase 2 _지시사항.xlsx — 6 columns, 담당파트 dropdown only.
 
-    `team` is duck-typed: must expose `.name`, `.groups[*].name`, and
-    `iter_parts()` yielding (group, part) pairs (matches the Pydantic
-    Team model in templates/src/config.py.tmpl).
+    `team` is duck-typed: must expose `.name` and `iter_parts()` yielding
+    (group, part) pairs (matches the Pydantic Team model in
+    templates/src/config.py.tmpl).
+
+    Direct-instructor UX: 담당그룹은 묻지 않는다 (지시자가 알아야 할 정보가 아님).
+    배정 시 시스템이 담당파트 → team.iter_parts()로 그룹을 역산. 파트명은 team
+    전체에서 unique하도록 config validator가 강제.
     """
     wb = Workbook()
     ws = wb.active
     ws.title = f"{team.name} 지시사항"
     ws.append(DIRECTIVES_HEADERS)
 
-    # Hidden _refs sheet:
-    #   column A = group names (for 담당그룹 dropdown)
-    #   column B = flattened part names (for 담당파트 dropdown)
+    # Hidden _refs sheet: column A = flattened part names (담당파트 dropdown)
     refs = wb.create_sheet("_refs")
     refs.sheet_state = "hidden"
-
-    group_names = [g.name for g in team.groups]
-    for i, gname in enumerate(group_names, start=1):
-        refs.cell(row=i, column=1, value=gname)
-    groups_range = f"_refs!$A$1:$A${max(len(group_names), 1)}"
-
     part_names = [p.name for _, p in team.iter_parts()]
     for i, pname in enumerate(part_names, start=1):
-        refs.cell(row=i, column=2, value=pname)
-    parts_range = f"_refs!$B$1:$B${max(len(part_names), 1)}"
+        refs.cell(row=i, column=1, value=pname)
+    parts_range = f"_refs!$A$1:$A${max(len(part_names), 1)}"
 
-    dv_group = DataValidation(type="list", formula1=groups_range, allow_blank=True)
-    dv_group.add("C2:C1000")
-    ws.add_data_validation(dv_group)
-
+    # 담당파트 dropdown (column C)
     dv_part = DataValidation(type="list", formula1=parts_range, allow_blank=True)
-    dv_part.add("D2:D1000")
+    dv_part.add("C2:C1000")
     ws.add_data_validation(dv_part)
 
+    # 우선순위 dropdown (column D) — fixed inline literal
     dv_pri = DataValidation(type="list", formula1=_inline_list(PRIORITIES), allow_blank=True)
-    dv_pri.add("E2:E1000")
+    dv_pri.add("D2:D1000")
     ws.add_data_validation(dv_pri)
 
-    widths = {"A": 12, "B": 45, "C": 12, "D": 14, "E": 10, "F": 12, "G": 30}
+    # Column widths: 일자/지시내용/담당파트/우선순위/마감/비고
+    widths = {"A": 12, "B": 50, "C": 14, "D": 10, "E": 12, "F": 30}
     for col, w in widths.items():
         ws.column_dimensions[col].width = w
 
@@ -168,8 +165,12 @@ def generate_part_xlsx(
     last_week = wb.create_sheet("지난주")
     _populate_part_sheet(last_week, PART_SHEET_HEADERS)
 
+    # 지난주_완료 is an archive sheet maintained by `prepare`. Hide it from
+    # part leads so they only see the two sheets they're expected to work in
+    # (지난주 + 이번주). Compiler/prepare can still read/write it freely.
     last_done = wb.create_sheet("지난주_완료")
     _populate_part_sheet(last_done, PART_SHEET_HEADERS)
+    last_done.sheet_state = "hidden"
 
     refs = wb.create_sheet("_refs")
     refs.sheet_state = "hidden"

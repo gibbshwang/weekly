@@ -183,9 +183,9 @@ def test_init_to_compile_e2e_phase2(tmp_path: Path, fake_keyring):
         wb = load_workbook(team_data_root / "_지시사항.xlsx")
         ws = wb.active
         # Row 1: 담당파트 column filled → no LLM call expected
-        ws.append(["2026-04-27", "신규 분석", "사업그룹", "전략기획", "높음", "2026-04-30", ""])
+        ws.append(["2026-04-27", "신규 분석", "전략기획", "높음", "2026-04-30", ""])
         # Row 2: 담당파트 empty → LLM inference
-        ws.append(["2026-04-27", "고객사 미팅", "사업그룹", "", "보통", "2026-05-01", ""])
+        ws.append(["2026-04-27", "고객사 미팅", "", "보통", "2026-05-01", ""])
         wb.save(team_data_root / "_지시사항.xlsx")
 
         # ----- Step 4: wreport assign — LLM returns 사업개발 for the empty row -----
