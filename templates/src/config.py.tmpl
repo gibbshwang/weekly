@@ -1,12 +1,17 @@
 """Pydantic config models for weekly_runtime.
 
 Loaded from `config.yaml` at the project root (the directory `wreport` is invoked from).
+
+Phase 2 (2026-04-26) introduces a 3-level org hierarchy: Team → Group → Part.
+The legacy Department / PartLead form continues to load during the transition
+window; consumers (assigner / compiler / dashboard / mailer) migrate to `team`
+in Wave B/C/D/E and the legacy form is removed in the final cleanup wave.
 """
 import re
 from pathlib import Path
-from typing import List, Literal, Optional
+from typing import Iterator, List, Literal, Optional, Tuple
 import yaml
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 # Department / part names land in three sensitive places:
@@ -63,6 +68,80 @@ class PartLead(BaseModel):
         return _validate_safe_name(v, "part_leads[].part")
 
 
+# --- Phase 2: Team → Group → Part hierarchy ---
+
+
+class Part(BaseModel):
+    name: str
+    lead: Person
+
+    @field_validator("name")
+    @classmethod
+    def _check_name(cls, v: str) -> str:
+        return _validate_safe_name(v, "team.groups[].parts[].name")
+
+
+class Group(BaseModel):
+    name: str
+    lead: Person
+    parts: List[Part]
+
+    @field_validator("name")
+    @classmethod
+    def _check_name(cls, v: str) -> str:
+        return _validate_safe_name(v, "team.groups[].name")
+
+    @field_validator("parts")
+    @classmethod
+    def _check_parts(cls, v: List[Part]) -> List[Part]:
+        if not v:
+            raise ValueError("team.groups[].parts must not be empty")
+        return v
+
+
+class Team(BaseModel):
+    name: str
+    lead: Person
+    groups: List[Group]
+
+    @field_validator("name")
+    @classmethod
+    def _check_name(cls, v: str) -> str:
+        return _validate_safe_name(v, "team.name")
+
+    @field_validator("groups")
+    @classmethod
+    def _check_groups(cls, v: List[Group]) -> List[Group]:
+        if not v:
+            raise ValueError("team.groups must not be empty")
+        # Part names participate in filesystem paths and 업무ID suffixes; if two
+        # different groups both have a part named e.g. "전략기획" they would
+        # collide on `<week>/전략기획.xlsx`. Reject at config load.
+        seen = set()
+        for g in v:
+            for p in g.parts:
+                if p.name in seen:
+                    raise ValueError(
+                        f"part name {p.name!r} appears in more than one group; "
+                        f"part names must be unique within a team"
+                    )
+                seen.add(p.name)
+        return v
+
+    def iter_parts(self) -> Iterator[Tuple[Group, Part]]:
+        """Yield (group, part) pairs in declaration order — used by consumers
+        that operate on every part regardless of group membership."""
+        for g in self.groups:
+            for p in g.parts:
+                yield g, p
+
+    def all_part_lead_emails(self) -> List[str]:
+        return [p.lead.email for _, p in self.iter_parts()]
+
+    def all_group_lead_emails(self) -> List[str]:
+        return [g.lead.email for g in self.groups]
+
+
 class StorageConfig(BaseModel):
     type: Literal["local", "smb"]
     root: str  # path string (Windows or Unix), or UNC
@@ -93,14 +172,50 @@ class PromptsConfig(BaseModel):
 
 
 class WeeklyConfig(BaseModel):
-    department: Department
-    group_lead: Person
-    part_leads: List[PartLead]
+    # Both org forms are optional individually; the model_validator below
+    # requires exactly one (legacy department or new team). The legacy form
+    # is preserved during the Phase 2 transition; consumers migrate one
+    # subsystem at a time and the legacy fields disappear in the cleanup wave.
+    department: Optional[Department] = None
+    group_lead: Optional[Person] = None
+    part_leads: Optional[List[PartLead]] = None
+    team: Optional[Team] = None
+
     storage: StorageConfig
     schedule: ScheduleConfig
     smtp: SMTPConfig
     ai: AIConfig
     prompts: PromptsConfig = Field(default_factory=PromptsConfig)
+
+    @model_validator(mode="after")
+    def _exactly_one_org_form(self) -> "WeeklyConfig":
+        legacy_present = (
+            self.department is not None
+            or self.group_lead is not None
+            or self.part_leads is not None
+        )
+        if self.team is None and not legacy_present:
+            raise ValueError(
+                "config must include either `team` (Phase 2) or "
+                "`department`+`group_lead`+`part_leads` (legacy)"
+            )
+        if self.team is not None and legacy_present:
+            raise ValueError(
+                "config must NOT mix Phase 2 `team` with legacy "
+                "`department`/`group_lead`/`part_leads`"
+            )
+        if legacy_present:
+            # Legacy form: all three legacy fields must appear together
+            if not (
+                self.department is not None
+                and self.group_lead is not None
+                and self.part_leads is not None
+            ):
+                raise ValueError(
+                    "legacy form requires `department`, `group_lead`, AND "
+                    "`part_leads` — partial legacy config is not accepted"
+                )
+        return self
 
 
 def load_config(path: Path) -> WeeklyConfig:

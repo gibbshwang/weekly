@@ -142,3 +142,226 @@ def test_validators_accept_korean_and_safe_chars(tmp_path: Path):
     cfg = mod.load_config(yaml_path)
     assert cfg.department.name == "전략기획팀_2026"
     assert "neo-team" in cfg.department.parts
+
+
+# --- Phase 2: Team / Group / Part hierarchy (additive — coexists with Department) ---
+
+
+def _build_team_yaml(tmp_path: Path, team_payload: dict, **base_overrides) -> Path:
+    """Build a config.yaml exercising the new `team` block.
+
+    The legacy `department` block is omitted; for the transition window the
+    config schema accepts EITHER form.
+    """
+    payload = {
+        "team": team_payload,
+        "storage": {"type": "local", "root": str(tmp_path / "store")},
+        "schedule": {"assign_cron": "0 * * * *", "compile_cron": "0 17 * * 5"},
+        "smtp": {"host": "smtp.gmail.com", "port": 587, "user": "op@example.com"},
+        "ai": {"provider": "codex"},
+        "prompts": {"override_dir": None},
+    }
+    payload.update(base_overrides)
+    yaml_path = tmp_path / "config.yaml"
+    yaml_path.write_text(yaml.safe_dump(payload, allow_unicode=True), encoding="utf-8")
+    return yaml_path
+
+
+def test_team_config_loads_three_level_hierarchy(tmp_path: Path):
+    """Team has groups; each group has its own lead and parts; each part has a lead."""
+    mod = _load_config_module(tmp_path)
+    yaml_path = _build_team_yaml(tmp_path, {
+        "name": "기획팀",
+        "lead": {"name": "팀장 김", "email": "team_lead@example.com"},
+        "groups": [
+            {
+                "name": "사업그룹",
+                "lead": {"name": "그룹장 이", "email": "biz_group_lead@example.com"},
+                "parts": [
+                    {"name": "전략기획", "lead": {"name": "전략장", "email": "strat@example.com"}},
+                    {"name": "사업개발", "lead": {"name": "개발장", "email": "biz@example.com"}},
+                ],
+            },
+            {
+                "name": "운영그룹",
+                "lead": {"name": "그룹장 박", "email": "ops_group_lead@example.com"},
+                "parts": [
+                    {"name": "운영관리", "lead": {"name": "운영장", "email": "ops@example.com"}},
+                ],
+            },
+        ],
+    })
+    cfg = mod.load_config(yaml_path)
+    assert cfg.team.name == "기획팀"
+    assert cfg.team.lead.email == "team_lead@example.com"
+    assert len(cfg.team.groups) == 2
+    biz, ops = cfg.team.groups
+    assert biz.name == "사업그룹"
+    assert biz.lead.email == "biz_group_lead@example.com"
+    assert [p.name for p in biz.parts] == ["전략기획", "사업개발"]
+    assert biz.parts[0].lead.email == "strat@example.com"
+    assert ops.parts[0].name == "운영관리"
+
+
+def test_team_rejects_dangerous_team_name(tmp_path: Path):
+    mod = _load_config_module(tmp_path)
+    yaml_path = _build_team_yaml(tmp_path, {
+        "name": "../etc",
+        "lead": {"name": "x", "email": "x@x.com"},
+        "groups": [{
+            "name": "g1",
+            "lead": {"name": "x", "email": "x@x.com"},
+            "parts": [{"name": "p1", "lead": {"name": "x", "email": "x@x.com"}}],
+        }],
+    })
+    with pytest.raises(Exception):
+        mod.load_config(yaml_path)
+
+
+def test_team_rejects_dangerous_group_name(tmp_path: Path):
+    mod = _load_config_module(tmp_path)
+    yaml_path = _build_team_yaml(tmp_path, {
+        "name": "기획팀",
+        "lead": {"name": "x", "email": "x@x.com"},
+        "groups": [{
+            "name": "../escape",
+            "lead": {"name": "x", "email": "x@x.com"},
+            "parts": [{"name": "p1", "lead": {"name": "x", "email": "x@x.com"}}],
+        }],
+    })
+    with pytest.raises(Exception):
+        mod.load_config(yaml_path)
+
+
+def test_team_rejects_dangerous_part_name(tmp_path: Path):
+    mod = _load_config_module(tmp_path)
+    yaml_path = _build_team_yaml(tmp_path, {
+        "name": "기획팀",
+        "lead": {"name": "x", "email": "x@x.com"},
+        "groups": [{
+            "name": "g1",
+            "lead": {"name": "x", "email": "x@x.com"},
+            "parts": [{"name": "=HYPERLINK(\"x\",\"y\")", "lead": {"name": "x", "email": "x@x.com"}}],
+        }],
+    })
+    with pytest.raises(Exception):
+        mod.load_config(yaml_path)
+
+
+def test_team_rejects_empty_groups(tmp_path: Path):
+    mod = _load_config_module(tmp_path)
+    yaml_path = _build_team_yaml(tmp_path, {
+        "name": "기획팀",
+        "lead": {"name": "x", "email": "x@x.com"},
+        "groups": [],
+    })
+    with pytest.raises(Exception):
+        mod.load_config(yaml_path)
+
+
+def test_team_rejects_duplicate_part_names_across_groups(tmp_path: Path):
+    """Part names are used as filesystem paths and as 업무ID part suffix —
+    they must be unique within a team to avoid xlsx collisions."""
+    mod = _load_config_module(tmp_path)
+    yaml_path = _build_team_yaml(tmp_path, {
+        "name": "기획팀",
+        "lead": {"name": "x", "email": "x@x.com"},
+        "groups": [
+            {
+                "name": "g1",
+                "lead": {"name": "x", "email": "x@x.com"},
+                "parts": [{"name": "공통파트", "lead": {"name": "x", "email": "x@x.com"}}],
+            },
+            {
+                "name": "g2",
+                "lead": {"name": "x", "email": "x@x.com"},
+                "parts": [{"name": "공통파트", "lead": {"name": "x", "email": "x@x.com"}}],
+            },
+        ],
+    })
+    with pytest.raises(Exception):
+        mod.load_config(yaml_path)
+
+
+def test_team_helper_iter_parts_returns_all_parts(tmp_path: Path):
+    """Team should expose a helper that flattens all (group, part) pairs for
+    consumers that iterate every part regardless of group membership."""
+    mod = _load_config_module(tmp_path)
+    yaml_path = _build_team_yaml(tmp_path, {
+        "name": "기획팀",
+        "lead": {"name": "x", "email": "x@x.com"},
+        "groups": [
+            {
+                "name": "g1",
+                "lead": {"name": "x", "email": "x@x.com"},
+                "parts": [
+                    {"name": "p1a", "lead": {"name": "x", "email": "x@x.com"}},
+                    {"name": "p1b", "lead": {"name": "x", "email": "x@x.com"}},
+                ],
+            },
+            {
+                "name": "g2",
+                "lead": {"name": "x", "email": "x@x.com"},
+                "parts": [
+                    {"name": "p2a", "lead": {"name": "x", "email": "x@x.com"}},
+                ],
+            },
+        ],
+    })
+    cfg = mod.load_config(yaml_path)
+    pairs = list(cfg.team.iter_parts())
+    assert len(pairs) == 3
+    group_names = [g.name for g, _ in pairs]
+    part_names = [p.name for _, p in pairs]
+    assert group_names == ["g1", "g1", "g2"]
+    assert part_names == ["p1a", "p1b", "p2a"]
+
+
+def test_team_helper_all_part_leads_collects_emails_across_groups(tmp_path: Path):
+    """For mailer cc list — collect every part lead email across all groups."""
+    mod = _load_config_module(tmp_path)
+    yaml_path = _build_team_yaml(tmp_path, {
+        "name": "기획팀",
+        "lead": {"name": "x", "email": "team@example.com"},
+        "groups": [
+            {
+                "name": "g1",
+                "lead": {"name": "g1l", "email": "g1l@example.com"},
+                "parts": [
+                    {"name": "p1a", "lead": {"name": "p1a", "email": "p1a@example.com"}},
+                ],
+            },
+            {
+                "name": "g2",
+                "lead": {"name": "g2l", "email": "g2l@example.com"},
+                "parts": [
+                    {"name": "p2a", "lead": {"name": "p2a", "email": "p2a@example.com"}},
+                    {"name": "p2b", "lead": {"name": "p2b", "email": "p2b@example.com"}},
+                ],
+            },
+        ],
+    })
+    cfg = mod.load_config(yaml_path)
+    assert cfg.team.all_part_lead_emails() == ["p1a@example.com", "p2a@example.com", "p2b@example.com"]
+    assert cfg.team.all_group_lead_emails() == ["g1l@example.com", "g2l@example.com"]
+
+
+def test_legacy_department_form_still_loads(tmp_path: Path):
+    """Transition guarantee: existing `department`-based configs continue to load
+    until consumers migrate (Wave B/C)."""
+    mod = _load_config_module(tmp_path)
+    yaml_path = tmp_path / "config.yaml"
+    yaml_path.write_text(yaml.safe_dump({
+        "department": {"name": "기획팀", "parts": ["전략기획"]},
+        "group_lead": {"name": "lead", "email": "lead@example.com"},
+        "part_leads": [{"part": "전략기획", "name": "p", "email": "p@example.com"}],
+        "storage": {"type": "local", "root": str(tmp_path / "s")},
+        "schedule": {"assign_cron": "0 * * * *", "compile_cron": "0 17 * * 5"},
+        "smtp": {"host": "smtp", "port": 587, "user": "u@x.com"},
+        "ai": {"provider": "codex"},
+        "prompts": {"override_dir": None},
+    }, allow_unicode=True), encoding="utf-8")
+    cfg = mod.load_config(yaml_path)
+    assert cfg.department is not None
+    assert cfg.department.name == "기획팀"
+    assert cfg.team is None
